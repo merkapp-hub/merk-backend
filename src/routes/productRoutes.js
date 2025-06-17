@@ -4,7 +4,7 @@ const authMiddleware = require('@middlewares/authMiddleware');
 
 const router = express.Router();
 router.post("/createProduct", authMiddleware(["user", "admin", "seller"]), product.createProduct);
-router.get("/getProduct", authMiddleware(["user", "admin", "seller"]), product.getProduct);
+router.get("/getProduct", product.getProduct);
 router.get("/getProductforseller", authMiddleware(["user", "admin", "seller", "employee"]), product.getProductforseller);
 router.get("/getSponseredProduct", product.getSponseredProduct);
 router.get("/getProductByslug/:id", product.getProductByslug);
