@@ -21,16 +21,14 @@ module.exports = {
         return res.status(400).json({ message: 'User already exists' });
       }
 
-      // const hashedPassword = await bcrypt.hash(password, 10);
+      const hashedPassword = await bcrypt.hash(password, 10);
 
       const newUser = new User({
         name,
         email,
-        // password: hashedPassword,
+        password: hashedPassword,
         role,
       });
-
-      newUser.password = newUser.encryptPassword(password);
 
       await newUser.save();
 
@@ -81,6 +79,7 @@ module.exports = {
           email: user.email,
           name: user.name,
           role: user.role,
+          token
         },
       });
     } catch (error) {
@@ -167,8 +166,8 @@ module.exports = {
         return response.forbidden(res, { message: 'unAuthorize' });
       }
       await Verification.findByIdAndDelete(verID);
-      // const hashedPassword = await bcrypt.hash(password, 10);
-      user.password = user.encryptPassword(password);
+      user.password = await bcrypt.hash(password, 10);
+      // user.password = user.encryptPassword(password);
       await user.save();
       //mailNotification.passwordChange({ email: user.email });
       return response.success(res, {
