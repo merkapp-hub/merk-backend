@@ -26,10 +26,9 @@ module.exports = {
       const newUser = new User({
         name,
         email,
-        password: hashedPassword,
         role,
       });
-
+      newUser.password = newUser.encryptPassword(password);
       await newUser.save();
 
       const userResponse = await User.findById(newUser._id).select('-password');
@@ -59,8 +58,7 @@ module.exports = {
       if (!user)
         return res.status(401).json({ message: 'Invalid email or password' });
 
-      // const isMatch = await user.matchPassword(password);
-      const isMatch = await bcrypt.compare(password, user.password);
+      const isMatch = await user.isValidPassword(password);
       if (!isMatch)
         return res.status(401).json({ message: 'Invalid email or password' });
 
@@ -167,8 +165,7 @@ module.exports = {
         return response.forbidden(res, { message: 'unAuthorize' });
       }
       await Verification.findByIdAndDelete(verID);
-      user.password = await bcrypt.hash(password, 10);
-      // user.password = user.encryptPassword(password);
+      user.password = user.encryptPassword(password);
       await user.save();
       //mailNotification.passwordChange({ email: user.email });
       return response.success(res, {
