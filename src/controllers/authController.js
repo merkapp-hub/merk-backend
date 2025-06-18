@@ -54,6 +54,8 @@ module.exports = {
       }
 
       const user = await User.findOne({ email });
+
+      console.log(user)
       if (!user)
         return res.status(401).json({ message: 'Invalid email or password' });
 
@@ -62,7 +64,7 @@ module.exports = {
         return res.status(401).json({ message: 'Invalid email or password' });
 
       const token = jwt.sign(
-        { id: user._id },
+        { id: user._id, role: user.role },
         process.env.JWT_SECRET || 'secret123',
         {
           expiresIn: '7d',
@@ -163,7 +165,8 @@ module.exports = {
         return response.forbidden(res, { message: 'unAuthorize' });
       }
       await Verification.findByIdAndDelete(verID);
-      user.password = user.encryptPassword(password);
+      // const hashedPassword = await bcrypt.hash(password, 10);
+      user.password = await bcrypt.hash(password, 10);
       await user.save();
       //mailNotification.passwordChange({ email: user.email });
       return response.success(res, {
