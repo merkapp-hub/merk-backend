@@ -74,7 +74,7 @@ module.exports = {
         message: 'Login successful',
         token,
         user: {
-          id: user._id,
+          _id: user._id,
           email: user.email,
           name: user.name,
           role: user.role,
@@ -170,6 +170,17 @@ module.exports = {
       //mailNotification.passwordChange({ email: user.email });
       return response.success(res, {
         message: 'Password changed ! Login now.',
+      });
+    } catch (error) {
+      return response.error(res, error);
+    }
+  },
+
+  fileUpload: async (req, res) => {
+    try {
+      return response.success(res, {
+        message: "File uploaded.",
+        file: req.file.path,
       });
     } catch (error) {
       return response.error(res, error);
