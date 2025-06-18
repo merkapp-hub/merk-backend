@@ -1,5 +1,5 @@
 const express = require('express');
-const faq = require('@controllers/FaqController');
+const faq = require('@controllers/faqController');
 const authMiddleware = require('@middlewares/authMiddleware');
 
 const router = express.Router();
