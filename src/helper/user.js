@@ -1,7 +1,7 @@
 "use strict";
-const mongoose = require("mongoose");
-const User = mongoose.model("User");
 const { scrypt, createDecipheriv, createCipheriv } = require("crypto");
+const Review = require("@models/Review");
+const User = require("@models/User");
 
 module.exports = {
   deleteUser: (condition) => {
@@ -37,8 +37,22 @@ module.exports = {
       });
     });
   },
+
   getDatewithAddedMinutes: (minutes) => {
     return new Date(new Date().getTime() + minutes * 60000);
+  },
+
+  getReview: async (product) => {
+    const packageReview = await Review.find({
+      product,
+    });
+
+    const pt = packageReview.reduce(
+      (maintotal, item) => maintotal + item.rating,
+      0
+    );
+
+    return pt / packageReview.length || 0;
   },
 
 };

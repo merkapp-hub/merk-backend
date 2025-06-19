@@ -5,6 +5,7 @@ const Favourite = require("@models/Favorite");
 module.exports = {
 
     AddFavourite: async (req, res) => {
+
         try {
             const payload = req?.body || {};
             payload.user = req.user.id;
