@@ -186,4 +186,13 @@ module.exports = {
       return response.error(res, error);
     }
   },
+
+  getProfile: async (req, res) => {
+    try {
+      const u = await User.findById(req.user.id, "-password");
+      return response.success(res, u);
+    } catch (error) {
+      return response.error(res, error);
+    }
+  },
 };
