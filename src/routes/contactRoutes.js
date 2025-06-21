@@ -6,7 +6,7 @@ const authMiddleware = require('@middlewares/authMiddleware');
 const router = express.Router();
 
 router.post("/contact",authMiddleware("user"), contact.createContact);
-router.get("/contacts",authMiddleware, contact.getAllContacts);
+router.get("/contacts", authMiddleware(["admin", "seller"]), contact.getAllContacts);
 router.delete("/contact/:id",authMiddleware, contact.deleteContact);
 
 module.exports = router;
