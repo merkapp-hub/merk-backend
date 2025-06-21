@@ -6,14 +6,21 @@ const Verification = require('@models/Verification');
 const jwt = require("jsonwebtoken");
 
 module.exports = {
-  register: async (req, res) => {
+   register: async (req, res) => {
     try {
-      const { name, email, password, role } = req.body;
+      const { firstName, lastName, email, password, role } = req.body;
+
+     
+      if (!firstName || !lastName || !email || !password) {
+        return res.status(400).json({ 
+          message: 'First name, last name, email, and password are required' 
+        });
+      }
 
       if (password.length < 6) {
         return res
           .status(400)
-          .json({ message: 'Password must be at least 8 characters long' });
+          .json({ message: 'Password must be at least 6 characters long' });
       }
 
       const existingUser = await User.findOne({ email });
@@ -21,13 +28,13 @@ module.exports = {
         return res.status(400).json({ message: 'User already exists' });
       }
 
-      const hashedPassword = await bcrypt.hash(password, 10);
-
       const newUser = new User({
-        name,
+        firstName,
+        lastName,
         email,
         role,
       });
+      
       newUser.password = newUser.encryptPassword(password);
       await newUser.save();
 
@@ -195,4 +202,69 @@ module.exports = {
       return response.error(res, error);
     }
   },
-};
+  updateProfile : async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { firstName, lastName, email } = req.body;
+
+    const user = await User.findById(userId);
+
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    
+    if (firstName) user.firstName = firstName;
+    if (lastName) user.lastName = lastName;
+    if (email) user.email = email;
+
+    const updatedUser = await user.save();
+
+    const userWithoutPassword = updatedUser.toObject();
+    delete userWithoutPassword.password;
+
+    return response.success(res, userWithoutPassword);
+  } catch (error) {
+    console.error("Update Profile Error:", error);
+    return response.error(res, error);
+  }
+},
+updatePassword : async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { currentPassword, newPassword, confirmNewPassword } = req.body;
+
+    if (!currentPassword || !newPassword || !confirmNewPassword) {
+      return res.status(400).json({ message: "All password fields are required" });
+    }
+
+    if (newPassword.length < 6) {
+      return res.status(400).json({ message: "New password must be at least 6 characters" });
+    }
+
+    if (newPassword !== confirmNewPassword) {
+      return res.status(400).json({ message: "New password and confirm password do not match" });
+    }
+
+    const user = await User.findById(userId);
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    const isMatch = bcrypt.compareSync(currentPassword, user.password);
+
+    if (!isMatch) {
+      return res.status(401).json({ message: "Current password is incorrect" });
+    }
+
+    user.password = bcrypt.hashSync(newPassword, bcrypt.genSaltSync(10));
+    await user.save();
+
+    return res.status(200).json({ message: "Password updated successfully" });
+  } catch (error) {
+    console.error("Update password error:", error);
+    return response.error(res, error);
+  }
+}
+}
