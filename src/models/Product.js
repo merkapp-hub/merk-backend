@@ -23,9 +23,6 @@ const productchema = new mongoose.Schema({
     origin: {
         type: String,
     },
-    // selflife: {
-    //     type: String,
-    // },
     manufacturername: {
         type: String,
     },
@@ -50,12 +47,7 @@ const productchema = new mongoose.Schema({
     long_description: {
         type: String,
     },
-    // price: {
-    //     type: Number,
-    // },
-    // offer: {
-    //     type: Number,
-    // },
+
     pieces: {
         type: Number,
     },
@@ -66,8 +58,6 @@ const productchema = new mongoose.Schema({
     varients: {
         type: [],
     },
-    decoration_method: [],
-    decoration_location: [],
     minQuantity: {
         type: Number
     },
@@ -75,17 +65,14 @@ const productchema = new mongoose.Schema({
         type: String
     },
     price_slot: [{
-        unit: {
-            type: String
-        },
         value: {
             type: String,
         },
-        our_price: {
+        Offerprice: {
             type: Number,
             default: 0
         },
-        other_price: {
+        price: {
             type: Number,
             default: 0
         },
