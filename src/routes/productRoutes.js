@@ -1,9 +1,19 @@
 const express = require('express');
 const product = require('@controllers/productController');
 const authMiddleware = require('@middlewares/authMiddleware');
+const { upload } = require('@services/fileUpload');
 
 const router = express.Router();
-router.post("/createProduct", authMiddleware(["user", "admin", "seller"]), product.createProduct);
+router.post("/createProduct", 
+    authMiddleware(["user", "admin", "seller"]), 
+    upload.array('images', 10), 
+    product.createProduct
+);
+router.post("/updateProduct", 
+    authMiddleware(["user", "admin", "seller"]), 
+    upload.array('images', 10),  
+    product.updateProduct
+);
 router.get("/getProduct", product.getProduct);
 router.get("/getProductforseller", authMiddleware(["user", "admin", "seller", "employee"]), product.getProductforseller);
 router.get("/getSponseredProduct", product.getSponseredProduct);
@@ -14,7 +24,7 @@ router.get("/getProductbycategory/:id", product.getProductbycategory);
 router.get("/getProductBycategoryId", product.getProductBycategoryId);
 router.get("/getProductBythemeId/:id", product.getProductBythemeId);
 router.get("/getcolors", product.getColors);
-router.post("/updateProduct", authMiddleware(["user", "admin", "seller"]), product.updateProduct);
+
 router.get("/topselling", product.topselling);
 router.get("/getnewitem", product.getnewitem);
 router.delete("/deleteProduct/:id", authMiddleware(["user", "admin", "seller"]), product.deleteProduct);
