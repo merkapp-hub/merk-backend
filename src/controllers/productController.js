@@ -14,21 +14,74 @@ const Category = require("@models/Category");
 const { getReview } = require("../../src/helper/user");
 
 module.exports = {
-  createProduct: async (req, res) => {
-    try {
-      const payload = req?.body || {};
-      payload.slug = payload.name
-        .toLowerCase()
-        .replace(/ /g, "-")
-        .replace(/[^\w-]+/g, "");
-      let cat = new Product(payload);
-      await cat.save();
-      return response.success(res, { message: "Product added successfully" });
-    } catch (error) {
-      return response.error(res, error);
-    }
-  },
+  // createProduct: async (req, res) => {
+  //   try {
+  //     const payload = req?.body || {};
+  //     payload.slug = payload.name
+  //       .toLowerCase()
+  //       .replace(/ /g, "-")
+  //       .replace(/[^\w-]+/g, "");
+  //     let cat = new Product(payload);
+  //     await cat.save();
+  //     return response.success(res, { message: "Product added successfully" });
+  //   } catch (error) {
+  //     return response.error(res, error);
+  //   }
+  // },
 
+createProduct: async (req, res) => {
+    try {
+        const payload = req?.body || {};
+        
+        // Parse JSON strings back to objects/arrays
+        if (payload.price_slot && typeof payload.price_slot === 'string') {
+            try {
+                payload.price_slot = JSON.parse(payload.price_slot);
+            } catch (e) {
+                payload.price_slot = [];
+            }
+        }
+        
+        if (payload.attributes && typeof payload.attributes === 'string') {
+            try {
+                payload.attributes = JSON.parse(payload.attributes);
+            } catch (e) {
+                payload.attributes = [];
+            }
+        }
+        
+        if (payload.category && typeof payload.category === 'string') {
+            // Keep category as string if it's an ObjectId
+            payload.category = payload.category;
+        }
+        
+        if (payload.varients && typeof payload.varients === 'string') {
+            try {
+                payload.varients = JSON.parse(payload.varients);
+            } catch (e) {
+                payload.varients = [];
+            }
+        }
+        
+        // Handle uploaded images
+        if (req.files && req.files.length > 0) {
+            const imageUrls = req.files.map(file => file.path);
+            payload.images = imageUrls;
+        }
+        
+        payload.slug = payload.name
+            .toLowerCase()
+            .replace(/ /g, "-")
+            .replace(/[^\w-]+/g, "");
+            
+        let cat = new Product(payload);
+        await cat.save();
+        
+        return response.success(res, { message: "Product added successfully" });
+    } catch (error) {
+        return response.error(res, error);
+    }
+},
   getProduct: async (req, res) => {
     try {
       let data = {};
@@ -338,24 +391,66 @@ module.exports = {
     }
   },
 
-  updateProduct: async (req, res) => {
+updateProduct: async (req, res) => {
     try {
-      const payload = req?.body || {};
-      if (payload.name) {
-        payload.slug = payload.name
-          .toLowerCase()
-          .replace(/ /g, "-")
-          .replace(/[^\w-]+/g, "");
-      }
-      let product = await Product.findByIdAndUpdate(payload?.id, payload, {
-        new: true,
-        upsert: true,
-      });
-      return response.success(res, product);
-    } catch (error) {
-      return response.error(res, error);
+        const payload = req?.body || {};
+        
+
+        
+        // Parse JSON strings back to objects/arrays
+        if (payload.price_slot && typeof payload.price_slot === 'string') {
+            try {
+                payload.price_slot = JSON.parse(payload.price_slot);
+            } catch (e) {
+                payload.price_slot = [];
+            }
+        }
+        
+        if (payload.attributes && typeof payload.attributes === 'string') {
+            try {
+                payload.attributes = JSON.parse(payload.attributes);
+            } catch (e) {
+                payload.attributes = [];
+            }
+        }
+        
+       if (payload.category) {
+    if (typeof payload.category === 'string' && !payload.category.match(/^[0-9a-fA-F]{24}$/)) {
+        delete payload.category; // Invalid ObjectId format ko remove kar do
     }
-  },
+}
+        
+        if (payload.varients && typeof payload.varients === 'string') {
+            try {
+                payload.varients = JSON.parse(payload.varients);
+            } catch (e) {
+                payload.varients = [];
+            }
+        }
+        
+        // Handle uploaded images
+        if (req.files && req.files.length > 0) {
+            const imageUrls = req.files.map(file => file.path);
+            payload.images = imageUrls;
+        }
+        
+        if (payload.name) {
+            payload.slug = payload.name
+                .toLowerCase()
+                .replace(/ /g, "-")
+                .replace(/[^\w-]+/g, "");
+        }
+        
+        let product = await Product.findByIdAndUpdate(payload?.id, payload, {
+            new: true,
+            upsert: true,
+        });
+        
+        return response.success(res, product);
+    } catch (error) {
+        return response.error(res, error);
+    }
+},
 
   topselling: async (req, res) => {
     try {
@@ -975,59 +1070,60 @@ module.exports = {
     }
   },
 
-  getSellerProductByAdmin: async (req, res) => {
-    try {
-      let page = parseInt(req.query.page) || 1;
-      let limit = parseInt(req.query.limit);
-      let skip = (page - 1) * limit;
+getSellerProductByAdmin: async (req, res) => {
+  try {
+    let page = parseInt(req.query.page) || 1;
+    let limit = parseInt(req.query.limit) || 10;
+    let skip = (page - 1) * limit;
 
-      let query = {};
+    let query = {};
 
-      if (req.query.search) {
-        const searchRegex = new RegExp(req.query.search, "i");
-
-
-        query.$or = [
-          { name: searchRegex }
-        ];
-      }
-
-      let product = await Product.find(query)
-        .populate("category")
-        .populate("userid", "-password")
-        .sort({ createdAt: -1 })
-        .skip(skip)
-        .limit(limit);
-
-      console.log(product)
-      // Filter again after populate (category.name and seller name)
-      if (req.query.search) {
-        const searchRegex = new RegExp(req.query.search, "i");
-
-        product = product.filter(p =>
-          searchRegex.test(p.name) ||
-          searchRegex.test(p.categoryName || "") ||
-          searchRegex.test(p.userid?.username || "")
-        );
-      }
-
-      const totalProducts = product.length;
-      const totalPages = Math.ceil(totalProducts / limit);
-
-      return res.status(200).json({
-        status: true,
-        data: product,
-        pagination: {
-          totalItems: totalProducts,
-          totalPages: totalPages,
-          currentPage: page,
-          itemsPerPage: limit,
-        },
-      });
-    } catch (error) {
-      return response.error(res, error);
+    // Add seller_id filter if provided
+    if (req.query.seller_id) {
+      query.userid = req.query.seller_id;
     }
-  },
+
+    // Get total count first for pagination
+    const totalProducts = await Product.countDocuments(query);
+    
+    let products = await Product.find(query)
+      .populate("category")
+      .populate("userid", "-password")
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit);
+
+    // Apply search filter after populate
+    if (req.query.search) {
+      const searchRegex = new RegExp(req.query.search, "i");
+      products = products.filter(p =>
+        searchRegex.test(p.name) ||
+        searchRegex.test(p.category?.name || "") ||
+        searchRegex.test(p.userid?.username || "")
+      );
+    }
+
+    const totalPages = Math.ceil(totalProducts / limit);
+
+    return res.status(200).json({
+      status: true,
+      data: products,
+      pagination: {
+        totalItems: totalProducts,
+        totalPages: totalPages,
+        currentPage: page,
+        itemsPerPage: limit,
+      },
+    });
+  } catch (error) {
+    console.error("Error in getSellerProductByAdmin:", error);
+    return res.status(500).json({
+      status: false,
+      message: "Server error occurred",
+      error: error.message
+    });
+  }
+},
 
 
   getAssignedOrder: async (req, res) => {

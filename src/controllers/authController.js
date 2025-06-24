@@ -1,11 +1,151 @@
+const mongoose = require('mongoose');
 const User = require('@models/User');
 const bcrypt = require('bcryptjs');
 const response = require('@responses/index');
 const userHelper = require('../helper/user');
 const Verification = require('@models/Verification');
 const jwt = require("jsonwebtoken");
+const ProductRequest = require('@models/ProductRequest');
+const Product = require('@models/Product');
+
 
 module.exports = {
+ getSellerList: async (req, res) => {
+    try {
+      
+      const allUsers = await User.find({}).limit(5);
+      console.log("All users sample:", JSON.stringify(allUsers, null, 2));
+      
+      const sellersOnly = await User.find({ role: "seller" });
+      console.log("Sellers found:", sellersOnly.length);
+      
+      let page = parseInt(req.query.page) || 1;
+      let limit = parseInt(req.query.limit) || 10;
+      let skip = (page - 1) * limit;
+
+      const search = req.query.search?.trim() || null;
+
+      const matchStage = {
+        role: "seller", 
+      };
+
+      if (search) {
+        const searchRegex = new RegExp(search, "i");
+        matchStage.$or = [
+          { firstName: { $regex: searchRegex } },
+          { lastName: { $regex: searchRegex } },
+          { email: { $regex: searchRegex } },
+        ];
+      }
+
+      let users = await User.find(matchStage)
+        .skip(skip)
+        .limit(limit)
+        .lean(); // Use lean() for better performance
+
+      // Attach stats to each seller individually
+      const indexedUsers = await Promise.all(
+        users.map(async (user, index) => {
+          const sellerId = user._id;
+
+          const [totalOrders, totalProducts, totalEmployees, incomeTaxStats] =
+            await Promise.all([
+              ProductRequest.countDocuments({ seller_id: sellerId }),
+              Product.countDocuments({ userid: sellerId }),
+              User.countDocuments({
+                type: "EMPLOYEE",
+                parent_vendor_id: sellerId,
+              }),
+              ProductRequest.aggregate([
+                {
+                  $match: { seller_id: sellerId }, // Fixed: removed unnecessary ObjectId wrapper
+                },
+                {
+                  $group: {
+                    _id: null,
+                    totalIncome: { $sum: { $ifNull: ["$total", 0] } },
+                    totalTax: { $sum: { $ifNull: ["$tax", 0] } },
+                  },
+                },
+              ]),
+            ]);
+
+          const returnRefundStats = await ProductRequest.aggregate([
+            { $match: { seller_id: sellerId } }, // Fixed: removed unnecessary ObjectId wrapper
+            { $unwind: "$productDetail" },
+            {
+              $group: {
+                _id: null,
+                returnedItems: {
+                  $sum: {
+                    $cond: ["$productDetail.returnDetails.isReturned", 1, 0],
+                  },
+                },
+                refundedItems: {
+                  $sum: {
+                    $cond: ["$productDetail.returnDetails.isRefunded", 1, 0],
+                  },
+                },
+                totalRefundAmount: {
+                  $sum: {
+                    $cond: [
+                      "$productDetail.returnDetails.isRefunded",
+                      {
+                        $ifNull: [
+                          "$productDetail.returnDetails.refundAmount",
+                          0,
+                        ],
+                      },
+                      0,
+                    ],
+                  },
+                },
+              },
+            },
+          ]);
+
+          const stats = {
+            totalOrders,
+            totalProducts,
+            totalEmployees,
+            returnedItems: returnRefundStats[0]?.returnedItems || 0,
+            refundedItems: returnRefundStats[0]?.refundedItems || 0,
+            totalRefundAmount: returnRefundStats[0]?.totalRefundAmount || 0,
+            totalIncome: incomeTaxStats[0]?.totalIncome || 0,
+            totalTax: incomeTaxStats[0]?.totalTax || 0,
+          };
+
+          // Get store data separately for each user
+          const Store = require('@models/Store'); // Add this import at top
+          const storeData = await Store.findOne({ userid: sellerId }).sort({ createdAt: -1 });
+
+          return {
+            ...user,
+            indexNo: skip + index + 1,
+            stats,
+            store: storeData || null, // Add store data
+          };
+        })
+      );
+
+      const totalUsers = await User.countDocuments({ role: "seller" }); // Changed from 'type' to 'role'
+      const totalPages = Math.ceil(totalUsers / limit);
+
+      return res.status(200).json({
+        status: true,
+        data: indexedUsers,
+        pagination: {
+          totalItems: totalUsers,
+          totalPages,
+          currentPage: page,
+          itemsPerPage: limit,
+        },
+      });
+    } catch (error) {
+      console.error("Error in getSellerList:", error);
+      return response.error(res, error);
+    }
+  },
    register: async (req, res) => {
     try {
       const { firstName, lastName, email, password, role } = req.body;
@@ -83,7 +223,7 @@ module.exports = {
         user: {
           _id: user._id,
           email: user.email,
-          name: user.name,
+          firstName: user.firstName,
           role: user.role,
           token
         },
@@ -183,16 +323,20 @@ module.exports = {
     }
   },
 
-  fileUpload: async (req, res) => {
+ fileUpload: async (req, res) => {
     try {
-      return response.success(res, {
-        message: "File uploaded.",
-        file: req.file.path,
-      });
+        if (!req.file) {
+            return response.error(res, { message: "No file uploaded" });
+        }
+        return response.success(res, {
+            message: "File uploaded successfully.",
+            file: req.file.path,
+        });
     } catch (error) {
-      return response.error(res, error);
+        console.error("File upload error:", error);
+        return response.error(res, error);
     }
-  },
+},
 
   getProfile: async (req, res) => {
     try {
@@ -266,5 +410,11 @@ updatePassword : async (req, res) => {
     console.error("Update password error:", error);
     return response.error(res, error);
   }
+},
+
+
+
 }
-}
+
+
+

@@ -5,37 +5,72 @@ const User = require("@models/User");
 
 module.exports = {
 
-    createStore: async (req, res) => {
+    // createStore: async (req, res) => {
+    //     try {
+    //         const payload = req?.body || {};
+    //         let cat = new Store(payload);
+    //         await cat.save();
+    //         const users = await User.findById(cat.userid);
+    //         console.log(users);
+
+    //         if (!users) {
+    //             return response.error(res, { message: 'User  not found' });
+    //         }
+    //         users.role = 'seller';
+    //         console.log("User  before saving:", users);
+
+    //         try {
+    //             await users.save();
+    //             console.log("User  type updated to SELLER", users.save());
+    //         } catch (saveError) {
+    //             console.error("Error saving user:", saveError);
+    //             return response.error(res, { message: 'Failed to update user type' });
+    //         }
+    //         return response.success(res, { message: 'Your Log in Details will be send in your email please have a look  !' });
+    //     } catch (error) {
+    //         return response.error(res, error);
+    //     }
+    // },
+ createStore: async (req, res) => {
+       
+        
         try {
             const payload = req?.body || {};
+            console.log("Payload:", payload);
+            
             let cat = new Store(payload);
             await cat.save();
+          
+            
             const users = await User.findById(cat.userid);
-            console.log(users);
+            console.log("User found:", users);
 
             if (!users) {
-                return response.error(res, { message: 'User  not found' });
+                console.log("User not found with ID:", cat.userid);
+                return response.error(res, { message: 'User not found' });
             }
-            users.type = 'SELLER';
-            console.log("User  before saving:", users);
-
-            try {
-                await users.save();
-                console.log("User  type updated to SELLER", users.save());
-            } catch (saveError) {
-                console.error("Error saving user:", saveError);
-                return response.error(res, { message: 'Failed to update user type' });
-            }
-            return response.success(res, { message: 'Your Log in Details will be send in your email please have a look  !' });
+            
+         
+            users.role = 'seller';
+            
+            
+            const savedUser = await users.save();
+            
+            
+            return response.success(res, { 
+                message: 'Your Log in Details will be send in your email please have a look!',
+                store: cat,
+                user: savedUser
+            });
         } catch (error) {
+            console.error("Error in createStore:", error);
             return response.error(res, error);
         }
     },
-
     getStore: async (req, res) => {
         try {
             let data = {}
-            if (req.user.type === 'SELLER') {
+            if (req.user.type === 'seller') {
                 data.userid = req.user.id
             }
             let product = await Store.find(data).populate('category').sort({ 'createdAt': -1 });
