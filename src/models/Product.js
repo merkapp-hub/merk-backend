@@ -1,5 +1,5 @@
 'use strict';
-
+ 
 const mongoose = require('mongoose');
 const productchema = new mongoose.Schema({
     category: {
@@ -47,7 +47,7 @@ const productchema = new mongoose.Schema({
     long_description: {
         type: String,
     },
-
+ 
     pieces: {
         type: Number,
     },
@@ -102,7 +102,7 @@ const productchema = new mongoose.Schema({
 }, {
     timestamps: true
 });
-
+ 
 productchema.set('toJSON', {
     getters: true,
     virtuals: false,
@@ -111,7 +111,7 @@ productchema.set('toJSON', {
         return ret;
     }
 });
-
+ 
 const Product = mongoose.model('Product', productchema);
-
+ 
 module.exports = Product;

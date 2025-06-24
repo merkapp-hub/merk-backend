@@ -1070,59 +1070,60 @@ updateProduct: async (req, res) => {
     }
   },
 
-  getSellerProductByAdmin: async (req, res) => {
-    try {
-      let page = parseInt(req.query.page) || 1;
-      let limit = parseInt(req.query.limit);
-      let skip = (page - 1) * limit;
+getSellerProductByAdmin: async (req, res) => {
+  try {
+    let page = parseInt(req.query.page) || 1;
+    let limit = parseInt(req.query.limit) || 10;
+    let skip = (page - 1) * limit;
 
-      let query = {};
+    let query = {};
 
-      if (req.query.search) {
-        const searchRegex = new RegExp(req.query.search, "i");
-
-
-        query.$or = [
-          { name: searchRegex }
-        ];
-      }
-
-      let product = await Product.find(query)
-        .populate("category")
-        .populate("userid", "-password")
-        .sort({ createdAt: -1 })
-        .skip(skip)
-        .limit(limit);
-
-      console.log(product)
-      // Filter again after populate (category.name and seller name)
-      if (req.query.search) {
-        const searchRegex = new RegExp(req.query.search, "i");
-
-        product = product.filter(p =>
-          searchRegex.test(p.name) ||
-          searchRegex.test(p.categoryName || "") ||
-          searchRegex.test(p.userid?.username || "")
-        );
-      }
-
-      const totalProducts = product.length;
-      const totalPages = Math.ceil(totalProducts / limit);
-
-      return res.status(200).json({
-        status: true,
-        data: product,
-        pagination: {
-          totalItems: totalProducts,
-          totalPages: totalPages,
-          currentPage: page,
-          itemsPerPage: limit,
-        },
-      });
-    } catch (error) {
-      return response.error(res, error);
+    // Add seller_id filter if provided
+    if (req.query.seller_id) {
+      query.userid = req.query.seller_id;
     }
-  },
+
+    // Get total count first for pagination
+    const totalProducts = await Product.countDocuments(query);
+    
+    let products = await Product.find(query)
+      .populate("category")
+      .populate("userid", "-password")
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit);
+
+    // Apply search filter after populate
+    if (req.query.search) {
+      const searchRegex = new RegExp(req.query.search, "i");
+      products = products.filter(p =>
+        searchRegex.test(p.name) ||
+        searchRegex.test(p.category?.name || "") ||
+        searchRegex.test(p.userid?.username || "")
+      );
+    }
+
+    const totalPages = Math.ceil(totalProducts / limit);
+
+    return res.status(200).json({
+      status: true,
+      data: products,
+      pagination: {
+        totalItems: totalProducts,
+        totalPages: totalPages,
+        currentPage: page,
+        itemsPerPage: limit,
+      },
+    });
+  } catch (error) {
+    console.error("Error in getSellerProductByAdmin:", error);
+    return res.status(500).json({
+      status: false,
+      message: "Server error occurred",
+      error: error.message
+    });
+  }
+},
 
 
   getAssignedOrder: async (req, res) => {

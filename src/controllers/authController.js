@@ -223,7 +223,7 @@ module.exports = {
         user: {
           _id: user._id,
           email: user.email,
-          name: user.name,
+          firstName: user.firstName,
           role: user.role,
           token
         },
@@ -323,16 +323,20 @@ module.exports = {
     }
   },
 
-  fileUpload: async (req, res) => {
+ fileUpload: async (req, res) => {
     try {
-      return response.success(res, {
-        message: "File uploaded.",
-        file: req.file.path,
-      });
+        if (!req.file) {
+            return response.error(res, { message: "No file uploaded" });
+        }
+        return response.success(res, {
+            message: "File uploaded successfully.",
+            file: req.file.path,
+        });
     } catch (error) {
-      return response.error(res, error);
+        console.error("File upload error:", error);
+        return response.error(res, error);
     }
-  },
+},
 
   getProfile: async (req, res) => {
     try {

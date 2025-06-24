@@ -1,7 +1,8 @@
 const express = require('express');
 const { login, register, sendOTP, verifyOTP, changePassword, fileUpload, getProfile, updateProfile, updatePassword, getSellerList } = require('@controllers/authController');
-const { upload } = require('@services/fileUpload');
+
 const authMiddleware = require('@middlewares/authMiddleware');
+const { upload } = require('@services/fileUpload');
 
 const router = express.Router();
 router.post('/login', login);
