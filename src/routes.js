@@ -13,6 +13,7 @@ const themeRoutes = require("@routes/themeRoutes");
 const timeRoutes = require("@routes/timeRoutes");
 const withdrawreqRoutes = require("@routes/withdrawreqRoutes");
 const contactRoutes = require('@routes/contactRoutes')
+const reviewRoutes = require('@routes/reviewRoutes')
 
 module.exports = (app) => {
   app.use('/api/auth', authRoutes);
@@ -30,5 +31,6 @@ module.exports = (app) => {
   app.use('/api', timeRoutes);
   app.use('/api', withdrawreqRoutes);
   app.use('/api',contactRoutes)
+  app.use('/api',reviewRoutes)
   
 };
