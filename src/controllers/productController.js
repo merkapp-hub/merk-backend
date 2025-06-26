@@ -31,55 +31,81 @@ module.exports = {
 
 createProduct: async (req, res) => {
     try {
+        
+        
         const payload = req?.body || {};
         
-        // Parse JSON strings back to objects/arrays
-        if (payload.price_slot && typeof payload.price_slot === 'string') {
-            try {
-                payload.price_slot = JSON.parse(payload.price_slot);
-            } catch (e) {
-                payload.price_slot = [];
+     
+        const parseJSONField = (field, defaultValue = []) => {
+            if (field && typeof field === 'string') {
+                try {
+                    return JSON.parse(field);
+                } catch (e) {
+                    console.log(`Error parsing ${field}:`, e.message);
+                    return defaultValue;
+                }
             }
-        }
+            return field || defaultValue;
+        };
+
+        payload.price_slot = parseJSONField(payload.price_slot, []);
+        payload.attributes = parseJSONField(payload.attributes, []);
+        payload.varients = parseJSONField(payload.varients, []);
         
-        if (payload.attributes && typeof payload.attributes === 'string') {
-            try {
-                payload.attributes = JSON.parse(payload.attributes);
-            } catch (e) {
-                payload.attributes = [];
-            }
-        }
         
         if (payload.category && typeof payload.category === 'string') {
-            // Keep category as string if it's an ObjectId
-            payload.category = payload.category;
+            payload.category = payload.category.trim();
         }
         
-        if (payload.varients && typeof payload.varients === 'string') {
-            try {
-                payload.varients = JSON.parse(payload.varients);
-            } catch (e) {
-                payload.varients = [];
-            }
-        }
-        
-        // Handle uploaded images
         if (req.files && req.files.length > 0) {
             const imageUrls = req.files.map(file => file.path);
             payload.images = imageUrls;
+            console.log('Uploaded images:', imageUrls);
         }
         
-        payload.slug = payload.name
-            .toLowerCase()
-            .replace(/ /g, "-")
-            .replace(/[^\w-]+/g, "");
-            
-        let cat = new Product(payload);
-        await cat.save();
+       
+        if (payload.name) {
+            payload.slug = payload.name
+                .toLowerCase()
+                .trim()
+                .replace(/ /g, "-")
+                .replace(/[^\w-]+/g, "");
+        }
         
-        return response.success(res, { message: "Product added successfully" });
+        console.log('Final payload:', payload);
+        
+        
+        let product = new Product(payload);
+        const savedProduct = await product.save();
+        
+        console.log('Product saved:', savedProduct._id);
+        
+        return response.success(res, { 
+            message: "Product added successfully",
+            product: savedProduct
+        });
+        
     } catch (error) {
-        return response.error(res, error);
+        console.error('Product creation error:', error);
+        
+        
+        if (error.name === 'ValidationError') {
+            return response.error(res, {
+                message: 'Validation failed',
+                details: error.errors
+            }, 400);
+        }
+        
+        if (error.code === 'LIMIT_FILE_SIZE') {
+            return response.error(res, {
+                message: 'File size too large. Maximum 10MB allowed.'
+            }, 400);
+        }
+        
+        return response.error(res, {
+            message: 'Internal server error',
+            error: error.message
+        }, 500);
     }
 },
   getProduct: async (req, res) => {
@@ -638,19 +664,21 @@ updateProduct: async (req, res) => {
       return response.error(res, error);
     }
   },
-  getTopSoldProduct: async (req, res) => {
-    try {
-      const { page = 1, limit = 20 } = req.query;
-      // const products = await Product.find({ sold_pieces: { $gte: 1 } }) // Only products with at least 1 sold
-      const products = await Product.find()
-        .sort({ sold_pieces: -1 })
-        .limit(limit * 1)
-        .skip((page - 1) * limit);
-      return response.success(res, products);
-    } catch (error) {
-      return response.error(res, error);
-    }
-  },
+ getTopSoldProduct: async (req, res) => {
+  try {
+    const page = parseInt(req.query.page) || 1;
+    const limit = 10; 
+
+    const products = await Product.find()
+      .sort({ sold_pieces: -1 })
+      .limit(limit)
+      .skip((page - 1) * limit);
+
+    return response.success(res, products);
+  } catch (error) {
+    return response.error(res, error);
+  }
+},
   getrequestProduct: async (req, res) => {
     try {
       const product = await ProductRequest.find()

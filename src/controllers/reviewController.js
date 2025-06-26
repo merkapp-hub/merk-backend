@@ -252,5 +252,44 @@ module.exports = {
         error: error.message
       });
     }
+  },
+  getAllReviews: async (req, res) => {
+  try {
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 20;
+    const skip = (page - 1) * limit;
+
+    const reviews = await Review.find({})
+      .populate('posted_by', 'firstName lastName email')
+      .populate('product', 'name image slug')
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit);
+
+    const totalReviews = await Review.countDocuments();
+
+    return res.status(200).json({
+      status: true,
+      message: "All reviews fetched successfully",
+      data: {
+        reviews,
+        pagination: {
+          currentPage: page,
+          totalPages: Math.ceil(totalReviews / limit),
+          totalReviews,
+          hasNext: page < Math.ceil(totalReviews / limit),
+          hasPrev: page > 1
+        }
+      }
+    });
+  } catch (error) {
+    console.error("Error in getAllReviews:", error);
+    return res.status(500).json({
+      status: false,
+      message: "Internal server error",
+      error: error.message
+    });
   }
+}
+
 };
