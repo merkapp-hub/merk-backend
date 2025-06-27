@@ -253,20 +253,102 @@ module.exports = {
       });
     }
   },
-  getAllReviews: async (req, res) => {
+getAllReviews: async (req, res) => {
   try {
     const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 20;
+    const limit = parseInt(req.query.limit) || 10; 
     const skip = (page - 1) * limit;
+    const dateFilter = req.query.date; 
+    let matchStage = {};
+    if (dateFilter) {
+      const startDate = new Date(dateFilter);
+      const endDate = new Date(dateFilter);
+      endDate.setDate(endDate.getDate() + 1); 
+      
+      matchStage.createdAt = {
+        $gte: startDate,
+        $lt: endDate
+      };
+    }
 
-    const reviews = await Review.find({})
-      .populate('posted_by', 'firstName lastName email')
-      .populate('product', 'name image slug')
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(limit);
+    const pipeline = [
+     
+      { $match: matchStage },
+      
+   
+      { $sort: { createdAt: -1 } },
+  
+      {
+        $lookup: {
+          from: 'users', 
+          localField: 'posted_by',
+          foreignField: '_id',
+          as: 'posted_by',
+          pipeline: [
+            {
+              $project: {
+                firstName: 1,
+                lastName: 1,
+                email: 1
+              }
+            }
+          ]
+        }
+      },
+      
+    
+      {
+        $lookup: {
+          from: 'products',
+          localField: 'product',
+          foreignField: '_id',
+          as: 'product',
+          pipeline: [
+            {
+              $project: {
+                name: 1,
+                image: 1,
+                slug: 1
+              }
+            }
+          ]
+        }
+      },
+      
+    
+      {
+        $unwind: {
+          path: '$posted_by',
+          preserveNullAndEmptyArrays: true
+        }
+      },
+      {
+        $unwind: {
+          path: '$product',
+          preserveNullAndEmptyArrays: true
+        }
+      },
+      
+     
+      {
+        $facet: {
+          data: [
+            { $skip: skip },
+            { $limit: limit }
+          ],
+          count: [
+            { $count: "total" }
+          ]
+        }
+      }
+    ];
 
-    const totalReviews = await Review.countDocuments();
+    
+    const result = await Review.aggregate(pipeline);
+    
+    const reviews = result[0].data || [];
+    const totalReviews = result[0].count[0]?.total || 0;
+    const totalPages = Math.ceil(totalReviews / limit);
 
     return res.status(200).json({
       status: true,
@@ -275,13 +357,15 @@ module.exports = {
         reviews,
         pagination: {
           currentPage: page,
-          totalPages: Math.ceil(totalReviews / limit),
+          totalPages,
           totalReviews,
-          hasNext: page < Math.ceil(totalReviews / limit),
-          hasPrev: page > 1
+          hasNext: page < totalPages,
+          hasPrev: page > 1,
+          limit
         }
       }
     });
+
   } catch (error) {
     console.error("Error in getAllReviews:", error);
     return res.status(500).json({

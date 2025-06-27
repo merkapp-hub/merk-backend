@@ -14,6 +14,7 @@ const timeRoutes = require("@routes/timeRoutes");
 const withdrawreqRoutes = require("@routes/withdrawreqRoutes");
 const contactRoutes = require('@routes/contactRoutes')
 const reviewRoutes = require('@routes/reviewRoutes')
+const saleRoutes = require('@routes/saleRoutes')
 
 module.exports = (app) => {
   app.use('/api/auth', authRoutes);
@@ -32,5 +33,6 @@ module.exports = (app) => {
   app.use('/api', withdrawreqRoutes);
   app.use('/api',contactRoutes)
   app.use('/api',reviewRoutes)
+  app.use('/api',saleRoutes)
   
 };

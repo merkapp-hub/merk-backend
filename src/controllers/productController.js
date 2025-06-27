@@ -115,9 +115,9 @@ createProduct: async (req, res) => {
         data.userid = req.query.seller_id;
       }
 
-      // Pagination
+     
       let page = parseInt(req.query.page) || 1;
-      let limit = parseInt(req.query.limit) || 10;
+      let limit = parseInt(req.query.limit) || 12;
       let skip = (page - 1) * limit;
 
       let product = await Product.find(data)
@@ -126,7 +126,7 @@ createProduct: async (req, res) => {
         .skip(skip)
         .limit(limit);
 
-      let totalProducts = await Product.countDocuments(data); // Count total products matching the criteria
+      let totalProducts = await Product.countDocuments(data); 
       const totalPages = Math.ceil(totalProducts / limit);
 
       return res.status(200).json({
@@ -667,7 +667,7 @@ updateProduct: async (req, res) => {
  getTopSoldProduct: async (req, res) => {
   try {
     const page = parseInt(req.query.page) || 1;
-    const limit = 10; 
+    const limit = 12; 
 
     const products = await Product.find()
       .sort({ sold_pieces: -1 })
@@ -1627,4 +1627,27 @@ getSellerProductByAdmin: async (req, res) => {
       return response.error(res, error);
     }
   },
+   getProductBySale: async (req, res) => {
+        try {
+
+            const flashSales = await FlashSale.find();
+
+            if (!flashSales || flashSales.length === 0) {
+                return response.ok(res, []);
+            }
+
+            const productIds = flashSales.flatMap(flashSale => flashSale.products);
+            if (!productIds || productIds.length === 0) {
+                return response.ok(res, []);
+            }
+
+            const productDetails = await Product.find({ _id: { $in: productIds } });
+
+            return response.ok(res, productDetails);
+
+        } catch (error) {
+            console.error("Error fetching products by sale:", error);
+            return response.error(res, error);
+        }
+    }
 };
