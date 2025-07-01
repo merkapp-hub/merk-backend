@@ -55,9 +55,13 @@ module.exports = {
       });
     }
 
-    const flashSales = await FlashSale.find({ SellerId }).populate(
-      "products"
-    );
+   const flashSales = await FlashSale.find({ SellerId }).populate({
+  path: "products",
+  populate: {
+    path: "category",
+    select: "name" 
+  }
+});
 
     return res.status(200).json({
       success: true,

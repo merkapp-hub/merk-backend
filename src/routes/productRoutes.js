@@ -29,7 +29,9 @@ router.get("/topselling", product.topselling);
 router.get("/getnewitem", product.getnewitem);
 router.delete("/deleteProduct/:id", authMiddleware(["user", "admin", "seller"]), product.deleteProduct);
 router.post("/deleteAllProduct", authMiddleware(["user", "admin", "seller"]), product.deleteAllProduct);
-router.post("/createProductRquest", authMiddleware(["user", "admin", "seller", "employee"]), product.requestProduct);
+
+// router.post("/createProductRequest", authMiddleware(["user", "admin", "seller", "employee"]), product.requestProduct);
+router.post('/createProductRequest',authMiddleware(["user", "admin", "seller", "employee"]),product.createProductRequest)
 router.get("/getTopSoldProduct", product.getTopSoldProduct);
 router.get("/getProductRquest", authMiddleware(["user", "admin", "seller", "employee"]), product.getrequestProduct);
 router.patch("/refundProduct/:id", authMiddleware(["user", "admin", "seller", "employee"]), product.refundProduct);

@@ -512,13 +512,17 @@ updateProduct: async (req, res) => {
       );
       await Product.deleteMany({ _id: { $in: newid } });
       return response.success(res, { meaasge: "Deleted successfully" });
-    } catch (error) {
+    } catch (error) { 
       return response.error(res, error);
     }
   },
 
   requestProduct: async (req, res) => {
+      console.log("=== API HIT ===");
+    console.log("Request body:", req.body);
+    console.log("User ID:", req.user?.id);
     try {
+      
       const payload = req?.body || {};
       const sellersNotified = new Set();
       const sellerOrders = {};
@@ -656,14 +660,268 @@ updateProduct: async (req, res) => {
         // }
       }
 
-      return response.success(res, {
-        message: "Product request added successfully",
-        orders: savedOrders,
-      });
+      return res.status(200).json({
+  status: true,
+  success: true,
+  message: "Product request added successfully",
+  orders: savedOrders,
+});
     } catch (error) {
-      return response.error(res, error);
+     return res.status(500).json({
+  status: false,
+  success: false,
+  message: error.message || "Internal Server Error",
+  error,
+});
     }
   },
+
+
+createProductRequest: async (req, res) => {
+    console.log("🚀 Backend API called");
+    console.log(req.body);
+    
+    try {
+       
+        req.setTimeout(60000); 
+        
+        const payload = req?.body || {};
+        
+        
+        if (!req.user || !req.user.id) {
+            console.error("❌ No authenticated user found");
+            return res.status(401).json({
+                status: false,
+                success: false,
+                message: "Authentication required"
+            });
+        }
+        
+        
+        
+        const sellersNotified = new Set();
+        const sellerOrders = {};
+
+        const productIds = payload.productDetail.map((item) => item.product);
+       
+        
+        const products = await Product.find({ _id: { $in: productIds } }).select("category").lean();
+      
+        
+        const categoryIds = products.map((p) => p.category);
+       
+        
+        const categories = await Category.find({
+            _id: { $in: categoryIds },
+        }).select("is_refundable").lean();
+        
+        const productCategoryMap = new Map();
+        products.forEach((product) => {
+            const category = categories.find((c) => c._id.equals(product.category));
+            productCategoryMap.set(
+                product._id.toString(),
+                !(category?.is_refundable ?? true)
+            );
+        });
+
+      
+        
+        for (const item of payload.productDetail) {
+          
+            let sellerId = item.seller_id?.toString();
+           
+            
+            
+            if (!sellerId || sellerId === 'FETCH_FROM_PRODUCT') {
+               
+                try {
+                    const product = await Product.findById(item.product).select('userid seller_id user_id owner_id').lean();
+                    if (product) {
+                        sellerId = product.userid || product.seller_id || product.user_id || product.owner_id;
+                       
+                    } else {
+                        console.error("❌ Product not found:", item.product);
+                    }
+                } catch (productError) {
+                    console.error("❌ Error fetching product:", productError);
+                }
+            }
+            
+            if (!sellerId) {
+                console.warn("⚠️ No seller_id found for product:", item.product, "- skipping");
+                continue;
+            }
+            
+            sellerId = sellerId.toString();
+
+            if (!sellerOrders[sellerId]) {
+              sellerOrders[sellerId] = {
+        user: req.user.id,
+        seller_id: sellerId,
+        status: "Pending",
+        productDetail: [],
+        shipping_address: payload.shipping_address,
+        total: 0,
+        paymentmode: payload.paymentmode,
+        timeslot: payload.timeslot,
+        deliveryCharge: payload.deliveryCharge || 0,
+        deliveryTip: payload.deliveryTip || 0
+    };
+            }
+
+            if (!sellersNotified.has(sellerId)) {
+                try {
+                    await notify(
+                        sellerId,
+                        "Order received",
+                        "You have received a new order"
+                    );
+                    sellersNotified.add(sellerId);
+
+                } catch (notifyError) {
+                  
+                    
+                }
+            }
+
+            const isReturnable = productCategoryMap.get(item.product.toString());
+
+            sellerOrders[sellerId].productDetail.push({
+                product: item.product,
+                image: item.image,
+                qty: item.qty,
+                price: item.price,
+                price_slot: item.price_slot,
+                isReturnable,
+                color: item.color,
+                name: item.name,
+                size: item.size
+            });
+
+          
+            sellerOrders[sellerId].total += item.qty * item.price;
+        }
+
+       
+        
+        const savedOrders = [];
+        
+        for (const sellerId in sellerOrders) {
+           
+            try {
+              
+                const taxData = await Tax.findOne();
+                const feeData = await Servicefee.findOne();
+                const taxRate = taxData?.taxRate || 0;
+                const baseTotal = sellerOrders[sellerId].total;
+                const taxAmount = (baseTotal * taxRate) / 100;
+                const deliveryCharge = sellerOrders[sellerId].deliveryCharge || 0;
+                const deliveryTip = sellerOrders[sellerId].deliveryTip || 0;
+
+                sellerOrders[sellerId].tax = taxAmount;
+                sellerOrders[sellerId].servicefee = feeData?.Servicefee || 0;
+                sellerOrders[sellerId].total = baseTotal;
+                sellerOrders[sellerId].finalAmount = baseTotal + taxAmount + deliveryCharge + deliveryTip;
+
+                const newOrder = new ProductRequest(sellerOrders[sellerId]);
+                console.log("Creating new order with data:", JSON.stringify(sellerOrders[sellerId], null, 2));
+                
+                const savedOrder = await newOrder.save();
+               
+                
+                savedOrders.push(savedOrder);
+                
+
+                for (const productItem of sellerOrders[sellerId].productDetail) {
+                    await Product.findByIdAndUpdate(
+                        productItem.product,
+                        { $inc: { sold_pieces: productItem.qty } },
+                        { new: true }
+                    );
+                }
+
+                
+                if (payload.paymentmode === "pay") {
+                    await User.findByIdAndUpdate(
+                        sellerId,
+                        { $inc: { wallet: Number(sellerOrders[sellerId].total) } },
+                        { new: true, upsert: true }
+                    );
+                   
+                }
+            } catch (orderError) {
+                console.error("❌ Error saving order for seller:", sellerId, orderError);
+                throw orderError; 
+            }
+        }
+
+        if (payload.shipping_address) {
+            try {
+                const updatedUser = await User.findByIdAndUpdate(
+                    req.user.id,
+                    {
+                        shipping_address: payload.shipping_address,
+                        location: payload.location,
+                    },
+                    { new: true, runValidators: true }
+                );
+
+                if (!updatedUser) {
+                    console.error(" User not found for ID:", req.user.id);
+                    return res.status(404).json({
+                        status: false,
+                        message: "User not found"
+                    });
+                }
+                
+            } catch (userUpdateError) {
+                console.error("⚠️ Error updating user address:", userUpdateError);
+                
+            }
+        }
+
+    
+        if (payload.user && payload.pointtype === "REDEEM") {
+            try {
+                let userdata = await User.findById(payload.user);
+                if (userdata) {
+                    userdata.referalpoints = userdata.referalpoints - Number(payload.point);
+                    await userdata.save();
+                   
+                }
+            } catch (pointsError) {
+                console.error("⚠️ Error updating referral points:", pointsError);
+                
+            }
+        }
+
+      
+    
+        return res.status(200).json({
+            status: true,
+            success: true,
+            message: "Product request added successfully",
+            data: {
+                status: true,
+                orders: savedOrders,
+                totalOrders: savedOrders.length
+            }
+        });
+
+    } catch (error) {
+       
+        
+ 
+        if (!res.headersSent) {
+            return res.status(500).json({
+                status: false,
+                success: false,
+                message: error.message || "Internal server error",
+                error: process.env.NODE_ENV === 'development' ? error.stack : undefined
+            });
+        }
+    }
+},
  getTopSoldProduct: async (req, res) => {
   try {
     const page = parseInt(req.query.page) || 1;
