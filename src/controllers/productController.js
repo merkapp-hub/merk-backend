@@ -678,7 +678,7 @@ updateProduct: async (req, res) => {
 
 
 createProductRequest: async (req, res) => {
-    console.log("🚀 Backend API called");
+    console.log(" Backend API called");
     console.log(req.body);
     
     try {

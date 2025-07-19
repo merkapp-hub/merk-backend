@@ -225,6 +225,7 @@ module.exports = {
           email: user.email,
           firstName: user.firstName,
           role: user.role,
+           status: user.status,
           token
         },
       });

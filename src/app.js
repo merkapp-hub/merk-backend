@@ -16,11 +16,8 @@ const app = express();
 connectDB();
 
 const corsOptions = {
-  origin: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
-  credentials: true,
-  optionsSuccessStatus: 200
+  origin: '*',
+ 
 };
 
 // Middleware
