@@ -181,6 +181,15 @@ createProduct: async (req, res) => {
         "category",
         "name slug"
       );
+      
+      // Check if product exists before accessing its properties
+      if (!product) {
+        return response.error(res, { 
+          message: "Product not found", 
+          status: 404 
+        });
+      }
+      
       let reviews = await Review.find({ product: product._id }).populate(
         "posted_by",
         "username"

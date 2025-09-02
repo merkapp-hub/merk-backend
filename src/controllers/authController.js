@@ -411,7 +411,42 @@ updatePassword : async (req, res) => {
     console.error("Update password error:", error);
     return response.error(res, error);
   }
+
+
+
+
 },
+
+
+
+deleteAccount : async (req, res) => {
+  try {
+    const userId = req.user._id; 
+    
+   
+    
+    
+    await User.findByIdAndDelete(userId);
+    
+   
+    res.status(200).json({
+      success: true,
+      message: 'Account deleted successfully'
+    });
+  } catch (error) {
+    console.error('Error deleting account:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error deleting account',
+      error: error.message
+    });
+  }
+
+
+
+}
+
+
 
 
 
