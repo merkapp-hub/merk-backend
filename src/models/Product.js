@@ -1,3 +1,5 @@
+
+
 'use strict';
  
 const mongoose = require('mongoose');
@@ -102,7 +104,13 @@ const productchema = new mongoose.Schema({
 }, {
     timestamps: true
 });
- 
+
+
+productchema.index({ sold_pieces: -1 }); // Index for top sold products
+productchema.index({ status: 1, sold_pieces: -1 }); // Compound index for verified products by sales
+productchema.index({ createdAt: -1 }); // Index for newest products
+productchema.index({ category: 1, status: 1 }); // Index for category filtering
+
 productchema.set('toJSON', {
     getters: true,
     virtuals: false,
@@ -115,3 +123,6 @@ productchema.set('toJSON', {
 const Product = mongoose.model('Product', productchema);
  
 module.exports = Product;
+
+
+

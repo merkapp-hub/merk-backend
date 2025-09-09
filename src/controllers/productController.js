@@ -13,6 +13,9 @@ const Favourite = require("@models/Favorite");
 const Category = require("@models/Category");
 const { getReview } = require("../../src/helper/user");
 
+const cache = new Map();
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
 module.exports = {
   // createProduct: async (req, res) => {
   //   try {
@@ -108,41 +111,101 @@ createProduct: async (req, res) => {
         }, 500);
     }
 },
-  getProduct: async (req, res) => {
+
+ getProduct: async (req, res) => {
     try {
-      let data = {};
-      if (req.query.seller_id) {
-        data.userid = req.query.seller_id;
+      const page = parseInt(req.query.page) || 1;
+      const limit = parseInt(req.query.limit) || 12;
+      const skip = (page - 1) * limit;
+
+      
+      const cacheKey = `products_page${page}_limit${limit}_seller${req.query.seller_id || 'all'}`;
+      
+      // Check cache first
+      const cachedData = cache.get(cacheKey);
+      if (cachedData && (Date.now() - cachedData.timestamp) < CACHE_TTL) {
+        console.log('Returning cached products');
+        return res.status(200).json(cachedData.data);
       }
 
-     
-      let page = parseInt(req.query.page) || 1;
-      let limit = parseInt(req.query.limit) || 12;
-      let skip = (page - 1) * limit;
+      // Optimized query with proper filtering
+      let query = {
+        status: "verified" // Only show verified products
+      };
+      
+      if (req.query.seller_id) {
+        query.userid = req.query.seller_id;
+      }
 
-      let product = await Product.find(data)
-        .populate("category")
-        .sort({ createdAt: -1 })
-        .skip(skip)
-        .limit(limit);
+      // Use aggregation pipeline for better performance
+      const products = await Product.aggregate([
+        { $match: query },
+        { $sort: { createdAt: -1 } },
+        { $skip: skip },
+        { $limit: limit },
+        {
+          $lookup: {
+            from: "categories",
+            localField: "category",
+            foreignField: "_id",
+            as: "category",
+            pipeline: [{ $project: { name: 1, slug: 1 } }]
+          }
+        },
+        {
+          $unwind: {
+            path: "$category",
+            preserveNullAndEmptyArrays: true
+          }
+        },
+        {
+          $project: {
+            name: 1,
+            slug: 1,
+            image: 1,
+            images: 1,
+            short_description: 1,
+            price_slot: 1,
+            sold_pieces: 1,
+            category: 1,
+            varients: 1,
+            is_verified: 1,
+            sponsered: 1,
+            createdAt: 1,
+            userid: 1
+          }
+        }
+      ]);
 
-      let totalProducts = await Product.countDocuments(data); 
+      // Get total count efficiently
+      const totalProducts = await Product.countDocuments(query);
       const totalPages = Math.ceil(totalProducts / limit);
 
-      return res.status(200).json({
+      const responseData = {
         status: true,
-        data: product,
+        data: products,
         pagination: {
           totalItems: totalProducts,
           totalPages: totalPages,
           currentPage: page,
           itemsPerPage: limit,
         },
+      };
+
+      // Cache the response
+      cache.set(cacheKey, {
+        data: responseData,
+        timestamp: Date.now()
       });
+
+      console.log('Returning fresh products data');
+      return res.status(200).json(responseData);
     } catch (error) {
+      console.error('getProduct error:', error);
       return response.error(res, error);
     }
   },
+
   getProductforseller: async (req, res) => {
     try {
       const { page = 1, limit = 20 } = req.query;
@@ -1007,21 +1070,105 @@ createProductRequest: async (req, res) => {
         }
     }
 },
+
  getTopSoldProduct: async (req, res) => {
   try {
     const page = parseInt(req.query.page) || 1;
-    const limit = 12; 
+    const limit = parseInt(req.query.limit) || 12;
+    const skip = (page - 1) * limit;
 
-    const products = await Product.find()
-      .sort({ sold_pieces: -1 })
-      .limit(limit)
-      .skip((page - 1) * limit);
+   
+    const cacheKey = `topSoldProducts_page${page}_limit${limit}`;
+    
+    
+    const cachedData = cache.get(cacheKey);
+    if (cachedData && (Date.now() - cachedData.timestamp) < CACHE_TTL) {
+      console.log('Returning cached top sold products');
+      return res.status(200).json(cachedData.data);
+    }
 
-    return response.success(res, products);
+   
+    const query = {
+      status: "verified", 
+      sold_pieces: { $gt: 0 } 
+    };
+
+    // Use aggregation pipeline for better performance
+    const products = await Product.aggregate([
+      { $match: query },
+      { $sort: { sold_pieces: -1, createdAt: -1 } }, // Sort by sold pieces, then by newest
+      { $skip: skip },
+      { $limit: limit },
+      {
+        $lookup: {
+          from: "categories",
+          localField: "category",
+          foreignField: "_id",
+          as: "category",
+          pipeline: [{ $project: { name: 1, slug: 1 } }] // Only get necessary category fields
+        }
+      },
+      {
+        $unwind: {
+          path: "$category",
+          preserveNullAndEmptyArrays: true
+        }
+      },
+      {
+        $project: {
+          name: 1,
+          slug: 1,
+          image: 1,
+          images: 1,
+          short_description: 1,
+          price_slot: 1,
+          sold_pieces: 1,
+          category: 1,
+          varients: 1,
+          is_verified: 1,
+          sponsered: 1,
+          createdAt: 1
+        }
+      }
+    ]);
+
+    // Get total count for pagination (using separate optimized query)
+    const totalProducts = await Product.countDocuments(query);
+    const totalPages = Math.ceil(totalProducts / limit);
+
+    const responseData = {
+      status: true,
+      data: products,
+      pagination: {
+        totalItems: totalProducts,
+        totalPages: totalPages,
+        currentPage: page,
+        itemsPerPage: limit,
+      },
+    };
+
+    // Cache the response data
+    cache.set(cacheKey, {
+      data: responseData,
+      timestamp: Date.now()
+    });
+
+    // Clean up old cache entries periodically
+    if (cache.size > 100) {
+      const oldEntries = Array.from(cache.entries())
+        .filter(([key, value]) => (Date.now() - value.timestamp) > CACHE_TTL)
+        .map(([key]) => key);
+      oldEntries.forEach(key => cache.delete(key));
+    }
+
+    console.log('Returning fresh top sold products data');
+    return res.status(200).json(responseData);
   } catch (error) {
+    console.error('getTopSoldProduct error:', error);
     return response.error(res, error);
   }
 },
+
 
   // Returns seller's wallet balance and recent earning transactions from orders
   getSellerWalletSummary: async (req, res) => {
