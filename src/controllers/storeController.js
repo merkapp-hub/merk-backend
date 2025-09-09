@@ -51,14 +51,20 @@ module.exports = {
             }
             
          
+            // Update user role and phone number
             users.role = 'seller';
             
+            // Save phone number from store data to user profile
+            if (payload.phone) {
+                users.number = payload.phone;
+                users.mobile = payload.phone; // Save to both fields for backward compatibility
+            }
             
             const savedUser = await users.save();
-            
+            console.log('Updated user data:', savedUser);
             
             return response.success(res, { 
-                message: 'Your Log in Details will be send in your email please have a look!',
+                message: 'Your Log in Details will be sent to your email. Please check your inbox!',
                 store: cat,
                 user: savedUser
             });

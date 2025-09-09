@@ -33,6 +33,9 @@ router.post("/deleteAllProduct", authMiddleware(["user", "admin", "seller"]), pr
 // router.post("/createProductRequest", authMiddleware(["user", "admin", "seller", "employee"]), product.requestProduct);
 router.post('/createProductRequest',authMiddleware(["user", "admin", "seller", "employee"]),product.createProductRequest)
 router.get("/getTopSoldProduct", product.getTopSoldProduct);
+router.get("/sellerWalletSummary", authMiddleware(["seller", "admin"]), product.getSellerWalletSummary);
+router.get("/adminWalletSummary", authMiddleware(["admin"]), product.getAdminWalletSummary);
+
 router.get("/getProductRquest", authMiddleware(["user", "admin", "seller", "employee"]), product.getrequestProduct);
 router.patch("/refundProduct/:id", authMiddleware(["user", "admin", "seller", "employee"]), product.refundProduct);
 router.post("/getOrderBySeller", authMiddleware(["user", "admin", "seller", "employee"]), product.getOrderBySeller);

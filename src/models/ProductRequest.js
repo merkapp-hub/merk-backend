@@ -126,6 +126,15 @@ const productrequestchema = new mongoose.Schema(
     finalAmount: {
       type: Number,
     },
+    
+    adminFee: {
+      type: Number,
+      default: 0,
+    },
+    sellerEarnings: {
+      type: Number,
+      default: 0,
+    },
     location: {
       type: pointSchema,
     },

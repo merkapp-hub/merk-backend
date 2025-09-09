@@ -38,6 +38,16 @@ const userSchema = new mongoose.Schema(
       type: String,
       default: "Pending",
     },
+    // Seller balance for payouts/withdrawals
+    wallet: {
+      type: Number,
+      default: 0,
+    },
+    // Admin collected commissions from orders
+    cashReceive: {
+      type: Number,
+      default: 0,
+    },
     // type: {
     //   type: String,
     //   enum: ['user', 'admin', 'seller'],

@@ -17,6 +17,17 @@ const withdrawreqSchema = new mongoose.Schema(
       type: String,
       default: 'Pending'
     },
+    type: {
+      type: String,
+      enum: ['debit', 'credit'],
+      default: 'debit'
+    },
+    description: {
+      type: String
+    },
+    referenceId: {
+      type: String
+    }
   },
   {
     timestamps: true,

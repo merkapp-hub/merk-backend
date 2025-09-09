@@ -6,11 +6,21 @@ const User = require("@models/User");
 module.exports = {
   createWithdrawreq: async (req, res) => {
     try {
-      req.body.request_by = req.user.id;
-      const notify = new Withdrawreq(req.body);
-      const noti = await notify.save();
-      return response.success(res, noti);
-    } catch (e) {
+      const { amount, note, paymentMethod } = req.body;
+      
+      const withdrawRequest = new Withdrawreq({
+        request_by: req.user.id,
+        amount,
+        note,
+        type: 'debit',
+        description: `Withdrawal request for ${amount}$ via ${paymentMethod || 'bank transfer'}`,
+        referenceId: `WD-${Date.now()}`
+      });
+      
+      const savedRequest = await withdrawRequest.save();
+      return response.success(res, savedRequest);
+    } catch (error) {
+      console.error('Error creating withdrawal request:', error);
       return response.error(res, error);
     }
   },
@@ -18,48 +28,99 @@ module.exports = {
   getWithdrawreq: async (req, res) => {
     try {
       // Pagination
-      let page = parseInt(req.query.page) || 1; // For example, page 1
-      let limit = parseInt(req.query.limit) || 10; // For example, 10 items per page
-      let skip = (page - 1) * limit; // Calculate the number of items to skip
+      const page = parseInt(req.query.page) || 1;
+      const limit = parseInt(req.query.limit) || 10;
+      const skip = (page - 1) * limit;
+      
+      // Build query
+      const query = {};
+      
+      // Add status filter if provided
+      if (req.query.status && req.query.status !== 'all') {
+        query.settle = req.query.status;
+      } else {
+        // Default to showing all statuses if not specified
+        query.settle = { $in: ['Pending', 'Completed', 'Rejected'] };
+      }
 
-      const reqlist = await Withdrawreq.find({ settle: "Pending" })
-        .populate("request_by", "username number")
+      // Get paginated results with complete seller information
+      const reqlist = await Withdrawreq.find(query)
+        .populate({
+          path: 'request_by',
+          select: 'username number email firstName lastName name mobile',
+          options: { lean: true }
+        })
         .sort({ createdAt: -1 })
         .skip(skip)
-        .limit(limit);
+        .limit(limit)
+        .lean();
 
+      // Add index to each item
       const indexedList = reqlist.map((item, index) => ({
-        ...item.toObject(), // Convert Mongoose document to plain object
+        ...item,
         index: skip + index + 1,
       }));
-      const totalItems = await Withdrawreq.countDocuments({
-        settle: "Pending",
-      });
+
+      // Get total count for pagination
+      const totalItems = await Withdrawreq.countDocuments(query);
       const totalPages = Math.ceil(totalItems / limit);
 
-      //   return response.success(res, reqlist);
       return res.status(200).json({
         status: true,
         data: indexedList,
         pagination: {
-          totalItems: totalItems,
-          totalPages: totalPages,
+          totalItems,
+          totalPages,
           currentPage: page,
           itemsPerPage: limit,
         },
       });
-    } catch (e) {
-      return response.error(res, error);
+    } catch (error) {
+      console.error('Error in getWithdrawreq:', error);
+      return res.status(500).json({
+        status: false,
+        message: error.message || 'Internal server error'
+      });
     }
   },
   getWithdrawreqbyseller: async (req, res) => {
     try {
-      const reqlist = await Withdrawreq.find({ request_by: req.user.id }).sort({
-        createdAt: -1,
+      // Get seller ID from params or user token
+      const sellerId = req.params.id || req.user?.id;
+      
+      // If no seller ID is provided and user is not authenticated
+      if (!sellerId) {
+        return res.status(400).json({
+          status: false,
+          message: 'Seller ID is required or user must be authenticated'
+        });
+      }
+      
+      // Check if the seller exists
+      const seller = await User.findById(sellerId);
+      if (!seller) {
+        return res.status(404).json({
+          status: false,
+          message: 'Seller not found'
+        });
+      }
+      
+      // Get withdrawal requests for the seller
+      const reqlist = await Withdrawreq.find({ request_by: sellerId })
+        .populate('request_by', 'username number email')
+        .sort({ createdAt: -1 });
+        
+      return res.status(200).json({
+        status: true,
+        data: reqlist
       });
-      return response.success(res, reqlist);
-    } catch (e) {
-      return response.error(res, error);
+      
+    } catch (error) {
+      console.error('Error in getWithdrawreqbyseller:', error);
+      return res.status(500).json({
+        status: false,
+        message: error.message || 'Internal server error'
+      });
     }
   },
 
@@ -81,4 +142,58 @@ module.exports = {
       return response.error(res, error);
     }
   },
+
+  // Get all withdrawal requests for admin with filtering and pagination
+  getAllWithdrawals: async (req, res) => {
+    try {
+      // Pagination
+      const page = parseInt(req.query.page) || 1;
+      const limit = parseInt(req.query.limit) || 10;
+      const skip = (page - 1) * limit;
+      
+      // Build query
+      const query = {};
+      
+      // Add status filter if provided
+      if (req.query.status && req.query.status !== 'all') {
+        query.settle = req.query.status;
+      } else {
+        // Default to showing all statuses if not specified
+        query.settle = { $in: ['Pending', 'Completed', 'Rejected'] };
+      }
+
+      // Get paginated results with user information
+      const withdrawals = await Withdrawreq.find(query)
+        .populate({
+          path: 'request_by',
+          select: 'username email firstName lastName name mobile number',
+          options: { lean: true }
+        })
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .lean();
+
+      // Get total count for pagination
+      const totalItems = await Withdrawreq.countDocuments(query);
+      const totalPages = Math.ceil(totalItems / limit);
+
+      return res.status(200).json({
+        status: true,
+        data: withdrawals,
+        pagination: {
+          totalItems,
+          totalPages,
+          currentPage: page,
+          itemsPerPage: limit,
+        },
+      });
+    } catch (error) {
+      console.error('Error in getAllWithdrawals:', error);
+      return res.status(500).json({
+        status: false,
+        message: error.message || 'Internal server error'
+      });
+    }
+  }
 };

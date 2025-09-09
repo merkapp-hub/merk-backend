@@ -628,12 +628,38 @@ updateProduct: async (req, res) => {
           );
         }
 
-        //  Ensure the seller's wallet is updated if paymentmode is "pay"
-        if (payload.paymentmode === "pay") {
+      
+        if (payload.paymentmode === "pay" || payload.paymentmode === "cod") {
+          const orderTotal = Number(sellerOrders[sellerId].total);
+          const adminFee = (orderTotal * 2) / 100;
+          const sellerEarnings = orderTotal - adminFee;
+
+         
           await User.findByIdAndUpdate(
             sellerId,
-            { $inc: { wallet: Number(sellerOrders[sellerId].total) } },
+            { $inc: { wallet: sellerEarnings } },
             { new: true, upsert: true }
+          );
+
+         
+          const adminUser = await User.findOne({ role: 'admin' });
+          if (adminUser) {
+            await User.findByIdAndUpdate(
+              adminUser._id,
+              { $inc: { cashReceive: adminFee } },
+              { new: true }
+            );
+          }
+
+          // Persist commission details on the order
+          await ProductRequest.findByIdAndUpdate(
+            newOrder._id,
+            {
+              $set: {
+                adminFee: adminFee,
+                sellerEarnings: sellerEarnings,
+              },
+            }
           );
         }
       }
@@ -687,8 +713,9 @@ updateProduct: async (req, res) => {
 
 
 createProductRequest: async (req, res) => {
-    console.log(" Backend API called");
-    console.log(req.body);
+    console.log("🚀 createProductRequest Backend API called");
+    console.log("📦 Request body:", req.body);
+    console.log("👤 User:", req.user);
     
     try {
        
@@ -744,10 +771,10 @@ createProductRequest: async (req, res) => {
             if (!sellerId || sellerId === 'FETCH_FROM_PRODUCT') {
                
                 try {
-                    const product = await Product.findById(item.product).select('userid seller_id user_id owner_id').lean();
+                    // Also select potential legacy field 'user' besides 'userid'
+                    const product = await Product.findById(item.product).select('userid user seller_id user_id owner_id').lean();
                     if (product) {
-                        sellerId = product.userid || product.seller_id || product.user_id || product.owner_id;
-                       
+                        sellerId = product.userid || product.user || product.seller_id || product.user_id || product.owner_id;
                     } else {
                         console.error("❌ Product not found:", item.product);
                     }
@@ -815,8 +842,11 @@ createProductRequest: async (req, res) => {
         
         const savedOrders = [];
         
+        console.log("🔄 Processing orders for sellers:", Object.keys(sellerOrders));
+        
         for (const sellerId in sellerOrders) {
-           
+            console.log(`🛍️ Processing order for seller: ${sellerId}`);
+            
             try {
               
                 const taxData = await Tax.findOne();
@@ -833,9 +863,10 @@ createProductRequest: async (req, res) => {
                 sellerOrders[sellerId].finalAmount = baseTotal + taxAmount + deliveryCharge + deliveryTip;
 
                 const newOrder = new ProductRequest(sellerOrders[sellerId]);
-                console.log("Creating new order with data:", JSON.stringify(sellerOrders[sellerId], null, 2));
+                console.log("📝 Creating new order with data:", JSON.stringify(sellerOrders[sellerId], null, 2));
                 
                 const savedOrder = await newOrder.save();
+                console.log("✅ Order saved successfully with ID:", savedOrder._id);
                
                 
                 savedOrders.push(savedOrder);
@@ -850,13 +881,50 @@ createProductRequest: async (req, res) => {
                 }
 
                 
-                if (payload.paymentmode === "pay") {
-                    await User.findByIdAndUpdate(
+                console.log(`💰 Processing commission for seller: ${sellerId}`);
+                console.log(`💰 Payment mode: ${payload.paymentmode}`);
+                console.log(`💰 Order total: ${sellerOrders[sellerId].total}`);
+                
+                if (payload.paymentmode === "pay" || payload.paymentmode === "cod") {
+                    const orderTotal = Number(sellerOrders[sellerId].total);
+                    const adminFee = (orderTotal * 2) / 100; // Calculate 2% admin fee
+                    const sellerEarnings = orderTotal - adminFee; // Deduct admin fee from seller's earnings
+                    
+                    console.log(`💰 Calculated admin fee: ${adminFee}`);
+                    console.log(`💰 Calculated seller earnings: ${sellerEarnings}`);
+                    
+                    // Update seller's wallet with the remaining amount (98%)
+                    const sellerUpdate = await User.findByIdAndUpdate(
                         sellerId,
-                        { $inc: { wallet: Number(sellerOrders[sellerId].total) } },
+                        { $inc: { wallet: sellerEarnings } },
                         { new: true, upsert: true }
                     );
-                   
+                    console.log(`💰 Seller wallet updated: ${sellerUpdate?.wallet}`);
+                    
+                    // Find admin user and update their cash receive amount
+                    const adminUser = await User.findOne({ role: 'admin' });
+                    if (adminUser) {
+                        const adminUpdate = await User.findByIdAndUpdate(
+                            adminUser._id,
+                            { $inc: { cashReceive: adminFee } },
+                            { new: true }
+                        );
+                        console.log(`💰 Admin commission updated: ${adminUpdate?.cashReceive}`);
+                    }
+                    
+                    // Add admin fee to the order document for record keeping
+                    await ProductRequest.findByIdAndUpdate(
+                        savedOrder._id,
+                        { 
+                            $set: { 
+                                adminFee: adminFee,
+                                sellerEarnings: sellerEarnings
+                            } 
+                        }
+                    );
+                    console.log(`💰 Order document updated with commission data`);
+                } else {
+                    console.log(`💰 Commission not applied - payment mode: ${payload.paymentmode}`);
                 }
             } catch (orderError) {
                 console.error("❌ Error saving order for seller:", sellerId, orderError);
@@ -906,6 +974,14 @@ createProductRequest: async (req, res) => {
 
       
     
+        if (!savedOrders.length) {
+            return res.status(400).json({
+                status: false,
+                success: false,
+                message: "No orders could be created because seller information was missing on products. Please contact support.",
+            });
+        }
+
         return res.status(200).json({
             status: true,
             success: true,
@@ -946,6 +1022,101 @@ createProductRequest: async (req, res) => {
     return response.error(res, error);
   }
 },
+
+  // Returns seller's wallet balance and recent earning transactions from orders
+  getSellerWalletSummary: async (req, res) => {
+    try {
+      const sellerId = req.user.id;
+
+      // Current seller profile for wallet balance
+      const seller = await User.findById(sellerId).select('wallet firstName lastName email role');
+      if (!seller) {
+        return response.error(res, { message: 'Seller not found' });
+      }
+
+      // Recent earnings from orders
+      const { page = 1, limit = 20 } = req.query;
+      const skip = (Number(page) - 1) * Number(limit);
+
+      const [items, totals] = await Promise.all([
+        ProductRequest.find({ seller_id: sellerId })
+          .sort({ createdAt: -1 })
+          .skip(skip)
+          .limit(Number(limit))
+          .select('orderId sellerEarnings adminFee total paymentmode createdAt')
+          .lean(),
+        ProductRequest.aggregate([
+          { $match: { seller_id: new mongoose.Types.ObjectId(sellerId) } },
+          { $group: { _id: null, totalEarnings: { $sum: { $ifNull: ['$sellerEarnings', 0] } }, orders: { $sum: 1 } } },
+        ]),
+      ]);
+
+      const aggregate = totals && totals.length ? totals[0] : { totalEarnings: 0, orders: 0 };
+
+      return res.status(200).json({
+        status: true,
+        data: {
+          wallet: seller.wallet || 0,
+          totalEarnings: aggregate.totalEarnings || 0,
+          totalOrders: aggregate.orders || 0,
+          transactions: items,
+          page: Number(page),
+          limit: Number(limit),
+        },
+      });
+    } catch (error) {
+      return response.error(res, error);
+    }
+  },
+
+  // Admin wallet summary - shows commission earnings
+  getAdminWalletSummary: async (req, res) => {
+    try {
+      // Get admin user
+      const admin = await User.findOne({ role: 'admin' }).select('cashReceive firstName lastName email role');
+      if (!admin) {
+        return response.error(res, { message: 'Admin not found' });
+      }
+
+      // Recent commission earnings from orders
+      const { page = 1, limit = 20 } = req.query;
+      const skip = (Number(page) - 1) * Number(limit);
+
+      const [items, totals] = await Promise.all([
+        ProductRequest.find({ adminFee: { $gt: 0 } })
+          .sort({ createdAt: -1 })
+          .skip(skip)
+          .limit(Number(limit))
+          .select('orderId adminFee sellerEarnings total paymentmode createdAt seller_id')
+          .populate('seller_id', 'firstName lastName email')
+          .lean(),
+        ProductRequest.aggregate([
+          { $match: { adminFee: { $gt: 0 } } },
+          { $group: { 
+            _id: null, 
+            totalCommissions: { $sum: { $ifNull: ['$adminFee', 0] } }, 
+            totalOrders: { $sum: 1 } 
+          } },
+        ]),
+      ]);
+
+      const aggregate = totals && totals.length ? totals[0] : { totalCommissions: 0, totalOrders: 0 };
+
+      return res.status(200).json({
+        status: true,
+        data: {
+          cashReceive: admin.cashReceive || 0,
+          totalCommissions: aggregate.totalCommissions || 0,
+          totalOrders: aggregate.totalOrders || 0,
+          transactions: items,
+          page: Number(page),
+          limit: Number(limit),
+        },
+      });
+    } catch (error) {
+      return response.error(res, error);
+    }
+  },
   getrequestProduct: async (req, res) => {
     try {
       const product = await ProductRequest.find()
