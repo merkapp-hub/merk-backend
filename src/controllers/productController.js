@@ -128,7 +128,7 @@ createProduct: async (req, res) => {
         return res.status(200).json(cachedData.data);
       }
 
-      // Optimized query with proper filtering
+    
       let query = {
         status: "verified" // Only show verified products
       };
@@ -137,7 +137,7 @@ createProduct: async (req, res) => {
         query.userid = req.query.seller_id;
       }
 
-      // Use aggregation pipeline for better performance
+      
       const products = await Product.aggregate([
         { $match: query },
         { $sort: { createdAt: -1 } },
@@ -1171,6 +1171,80 @@ createProductRequest: async (req, res) => {
 
 
   // Returns seller's wallet balance and recent earning transactions from orders
+  getSellerProducts: async (req, res) => {
+    try {
+      const page = parseInt(req.query.page) || 1;
+      const limit = parseInt(req.query.limit) || 12;
+      const skip = (page - 1) * limit;
+      const sellerId = req.query.seller_id;
+
+      if (!sellerId) {
+        return res.status(400).json({ status: false, message: 'Seller ID is required' });
+      }
+
+      const products = await Product.aggregate([
+        { 
+          $match: { 
+            userid: new mongoose.Types.ObjectId(sellerId) 
+          } 
+        },
+        { $sort: { createdAt: -1 } },
+        { $skip: skip },
+        { $limit: limit },
+        {
+          $lookup: {
+            from: "categories",
+            localField: "category",
+            foreignField: "_id",
+            as: "category",
+            pipeline: [{ $project: { name: 1, slug: 1 } }]
+          }
+        },
+        {
+          $unwind: {
+            path: "$category",
+            preserveNullAndEmptyArrays: true
+          }
+        },
+        {
+          $project: {
+            name: 1,
+            slug: 1,
+            image: 1,
+            images: 1,
+            short_description: 1,
+            price_slot: 1,
+            sold_pieces: 1,
+            category: 1,
+            varients: 1,
+            is_verified: 1,
+            sponsered: 1,
+            status: 1,
+            createdAt: 1,
+            userid: 1
+          }
+        }
+      ]);
+
+      const totalProducts = await Product.countDocuments({ userid: sellerId });
+      const totalPages = Math.ceil(totalProducts / limit);
+
+      return res.status(200).json({
+        status: true,
+        data: products,
+        pagination: {
+          totalItems: totalProducts,
+          totalPages: totalPages,
+          currentPage: page,
+          itemsPerPage: limit,
+        },
+      });
+    } catch (error) {
+      console.error('getSellerProducts error:', error);
+      return res.status(500).json({ status: false, message: 'Server error' });
+    }
+  },
+
   getSellerWalletSummary: async (req, res) => {
     try {
       const sellerId = req.user.id;

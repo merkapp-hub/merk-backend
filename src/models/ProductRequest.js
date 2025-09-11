@@ -74,7 +74,7 @@ const productrequestchema = new mongoose.Schema(
               "Return-requested",
               "Completed",
             ],
-          }, // status of the return and refund
+          }, 
           reason: String, // reason for return and refund
           proofImages: [String], // images for proof of return and refund
           refundAmount: Number, // amount to be refunded

@@ -15,6 +15,7 @@ router.post("/updateProduct",
     product.updateProduct
 );
 router.get("/getProduct", product.getProduct);
+router.get("/getSellerProducts", authMiddleware(["seller", "admin"]), product.getSellerProducts);
 router.get("/getProductforseller", authMiddleware(["user", "admin", "seller", "employee"]), product.getProductforseller);
 router.get("/getSponseredProduct", product.getSponseredProduct);
 router.get("/getProductByslug/:id", product.getProductByslug);
