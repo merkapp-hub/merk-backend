@@ -7,10 +7,99 @@ const Verification = require('@models/Verification');
 const jwt = require("jsonwebtoken");
 const ProductRequest = require('@models/ProductRequest');
 const Product = require('@models/Product');
+const path = require('path');
+const fs = require('fs');
+// const { v4: uuidv4 } = require('uuid');
+const { cloudinary } = require('@services/fileUpload');
 
+// Upload profile image
+const uploadProfileImage = async (req, res) => {
+  try {
+    console.log('Upload profile image request received');
+    
+    if (!req.file) {
+      console.log('No file uploaded');
+      return res.status(400).json({ 
+        success: false, 
+        message: 'No file uploaded' 
+      });
+    }
+
+    console.log('File received:', req.file);
+    
+    // Get user ID from the authenticated request
+    const userId = req.user.id;
+    console.log('User ID:', userId);
+    
+    try {
+      console.log('Uploading to Cloudinary...');
+      
+      // Upload to Cloudinary
+      const result = await cloudinary.uploader.upload(req.file.path, {
+        folder: 'profile_pictures',
+        width: 500,
+        height: 500,
+        crop: 'fill',
+        quality: 'auto',
+        fetch_format: 'auto'
+      });
+
+      console.log('Cloudinary upload successful:', result.secure_url);
+
+      // Update user's profile picture in the database
+      const updatedUser = await User.findByIdAndUpdate(
+        userId,
+        { profilePicture: result.secure_url },
+        { new: true, runValidators: true }
+      );
+
+      console.log('User profile picture updated');
+
+      // Delete the temporary file
+      if (req.file.path && fs.existsSync(req.file.path)) {
+        try {
+          fs.unlinkSync(req.file.path);
+          console.log('Temporary file deleted');
+        } catch (unlinkError) {
+          console.error('Error deleting temporary file:', unlinkError);
+        }
+      }
+
+      return res.status(200).json({
+        success: true,
+        message: 'Profile picture uploaded successfully',
+        profilePicture: result.secure_url
+      });
+      
+    } catch (uploadError) {
+      console.error('Error uploading to Cloudinary:', uploadError);
+      
+      // Clean up the temporary file if it exists
+      if (req.file.path && fs.existsSync(req.file.path)) {
+        try {
+          fs.unlinkSync(req.file.path);
+          console.log('Cleaned up temporary file after error');
+        } catch (unlinkError) {
+          console.error('Error cleaning up temporary file:', unlinkError);
+        }
+      }
+      
+      throw new Error(uploadError.message || 'Failed to upload image to storage');
+    }
+    
+  } catch (error) {
+    console.error('Error in uploadProfileImage:', error);
+    
+    return res.status(500).json({
+      success: false,
+      message: error.message || 'Error uploading profile image',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+};
 
 module.exports = {
- getSellerList: async (req, res) => {
+  getSellerList: async (req, res) => {
     try {
       
       const allUsers = await User.find({}).limit(5);
@@ -441,16 +530,9 @@ deleteAccount : async (req, res) => {
       error: error.message
     });
   }
+},
 
+// Export the uploadProfileImage function
+uploadProfileImage
 
-
-}
-
-
-
-
-
-}
-
-
-
+};

@@ -48,6 +48,10 @@ const userSchema = new mongoose.Schema(
       type: Number,
       default: 0,
     },
+    profilePicture: {
+      type: String,
+      default: ''
+    },
     // type: {
     //   type: String,
     //   enum: ['user', 'admin', 'seller'],

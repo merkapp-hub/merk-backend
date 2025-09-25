@@ -1,5 +1,5 @@
 const express = require('express');
-const { login, register, sendOTP, verifyOTP, changePassword, fileUpload, getProfile, updateProfile, updatePassword, getSellerList, deleteAccount } = require('@controllers/authController');
+const { login, register, sendOTP, verifyOTP, changePassword, fileUpload, getProfile, updateProfile, updatePassword, getSellerList, deleteAccount, uploadProfileImage } = require('@controllers/authController');
 
 const authMiddleware = require('@middlewares/authMiddleware');
 const { upload } = require('@services/fileUpload');
@@ -16,5 +16,6 @@ router.put('/updateProfile',authMiddleware(["user", "admin", "seller", "driver",
 router.put('/updatePassword',authMiddleware(["user", "admin", "seller", "driver", "employee"]),updatePassword)
 router.get("/getSellerListt", authMiddleware(["user", "admin", "seller", "driver", "employee"]),getSellerList);
 router.delete('/delete-account', authMiddleware(["user", "admin", "seller", "driver", "employee"]), deleteAccount);
+router.post('/uploadProfileImage', authMiddleware(["user", "admin", "seller", "driver", "employee"]), upload.single('profileImage'), uploadProfileImage);
 
 module.exports = router;

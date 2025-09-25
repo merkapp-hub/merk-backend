@@ -2042,52 +2042,153 @@ getSellerProductByAdmin: async (req, res) => {
     }
   },
 
+  // getrequestProductbyuser: async (req, res) => {
+  //   try {
+  //     const { page = 1, limit = 20 } = req.query;
+  //     const product = await ProductRequest.find({ user: req.user.id })
+  //       .populate("productDetail.product", "-varients")
+  //       .limit(limit * 1)
+  //       .skip((page - 1) * limit)
+  //       .sort({ createdAt: -1 });
+  //     // const product = await ProductRequest.aggregate([
+  //     //     {
+  //     //         $match: { user: new mongoose.Types.ObjectId(req.user.id) }
+  //     //     },
+  //     //     {
+  //     //         $unwind: {
+  //     //             path: '$productDetail',
+  //     //             preserveNullAndEmptyArrays: true
+  //     //         }
+  //     //     },
+  //     //     {
+  //     //         $lookup: {
+  //     //             from: 'products',
+  //     //             localField: 'productDetail.product',
+  //     //             foreignField: '_id',
+  //     //             as: 'productDetail.product',
+  //     //             pipeline: [
+
+  //     //                 {
+  //     //                     $project: {
+  //     //                         name: 1
+  //     //                     }
+  //     //                 },
+
+  //     //             ]
+  //     //         }
+  //     //     },
+  //     //     {
+  //     //         $unwind: {
+  //     //             path: '$productDetail.product',
+  //     //             preserveNullAndEmptyArrays: true
+  //     //         }
+  //     //     },
+
+  //     // ])
+
+  //     return response.success(res, product);
+  //   } catch (error) {
+  //     return response.error(res, error);
+  //   }
+  // },
   getrequestProductbyuser: async (req, res) => {
     try {
       const { page = 1, limit = 20 } = req.query;
-      const product = await ProductRequest.find({ user: req.user.id })
-        .populate("productDetail.product", "-varients")
-        .limit(limit * 1)
-        .skip((page - 1) * limit)
-        .sort({ createdAt: -1 });
-      // const product = await ProductRequest.aggregate([
-      //     {
-      //         $match: { user: new mongoose.Types.ObjectId(req.user.id) }
-      //     },
-      //     {
-      //         $unwind: {
-      //             path: '$productDetail',
-      //             preserveNullAndEmptyArrays: true
-      //         }
-      //     },
-      //     {
-      //         $lookup: {
-      //             from: 'products',
-      //             localField: 'productDetail.product',
-      //             foreignField: '_id',
-      //             as: 'productDetail.product',
-      //             pipeline: [
-
-      //                 {
-      //                     $project: {
-      //                         name: 1
-      //                     }
-      //                 },
-
-      //             ]
-      //         }
-      //     },
-      //     {
-      //         $unwind: {
-      //             path: '$productDetail.product',
-      //             preserveNullAndEmptyArrays: true
-      //         }
-      //     },
-
-      // ])
-
-      return response.success(res, product);
+      const userId = req.user.id;
+      
+      
+      const orders = await ProductRequest.find({ user: userId })
+        .populate({
+          path: "productDetail.product",
+          select: "name price image" 
+        })
+        .limit(parseInt(limit))
+        .sort({ createdAt: -1 })
+        .lean();
+      
+      
+      const allProductIds = [];
+      orders.forEach(order => {
+        if (order.productDetail && Array.isArray(order.productDetail)) {
+          order.productDetail.forEach(item => {
+            const productId = item.product?._id || item.product;
+            if (productId) {
+              allProductIds.push(productId);
+            }
+          });
+        }
+      });
+      
+      
+      const reviews = await Review.find({
+        product: { $in: allProductIds },
+        posted_by: userId  
+      }).lean();
+      
+      
+      const allReviews = await Review.aggregate([
+        {
+          $match: {
+            product: { $in: allProductIds.map(id => new mongoose.Types.ObjectId(id)) }
+          }
+        },
+        {
+          $group: {
+            _id: '$product',
+            totalRatings: { $sum: 1 },
+            averageRating: { $avg: '$rating' }
+          }
+        }
+      ]);
+      
+      
+      const userReviewMap = {};
+      reviews.forEach(review => {
+        userReviewMap[review.product.toString()] = {
+          rating: review.rating,
+          description: review.description,
+          createdAt: review.createdAt,
+          updatedAt: review.updatedAt,
+          _id: review._id
+        };
+      });
+      
+      // Create a map of productId to review stats (all users)
+      const reviewStatsMap = {};
+      allReviews.forEach(stat => {
+        reviewStatsMap[stat._id.toString()] = {
+          totalRatings: stat.totalRatings,
+          averageRating: stat.averageRating
+        };
+      });
+      
+      // Add review status to each product in each order
+      const ordersWithReviews = orders.map(order => {
+        if (order.productDetail && Array.isArray(order.productDetail)) {
+          order.productDetail = order.productDetail.map(item => {
+            const productId = item.product?._id?.toString() || item.product?.toString();
+            const hasUserReview = productId && userReviewMap[productId];
+            const stats = reviewStatsMap[productId] || { totalRatings: 0, averageRating: 0 };
+            
+            return {
+              ...item,
+              isRated: !!hasUserReview,  // True only if current user has reviewed
+              review: hasUserReview || null,
+              rating: hasUserReview ? userReviewMap[productId].rating : 0,
+              // Include review stats for the product
+              reviewStats: {
+                totalRatings: stats.totalRatings,
+                averageRating: stats.averageRating
+              }
+            };
+          });
+        }
+        return order;
+      });
+      
+      return response.success(res, ordersWithReviews);
     } catch (error) {
+      console.error('Error in getrequestProductbyuser:', error);
       return response.error(res, error);
     }
   },
