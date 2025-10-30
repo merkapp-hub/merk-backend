@@ -15,6 +15,7 @@ const withdrawreqRoutes = require("@routes/withdrawreqRoutes");
 const contactRoutes = require('@routes/contactRoutes')
 const reviewRoutes = require('@routes/reviewRoutes')
 const saleRoutes = require('@routes/saleRoutes')
+const aboutRoutes = require('@routes/aboutRoutes')
 // const walletRoutes = require('@routes/walletRoutes')
 module.exports = (app) => {
   app.use('/api/auth', authRoutes);
@@ -34,5 +35,6 @@ module.exports = (app) => {
   app.use('/api',contactRoutes)
   app.use('/api',reviewRoutes)
   app.use('/api',saleRoutes)
+  app.use('/api',aboutRoutes)
   // app.use('/api',walletRoutes)
 };

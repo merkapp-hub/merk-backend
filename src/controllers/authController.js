@@ -9,6 +9,7 @@ const ProductRequest = require('@models/ProductRequest');
 const Product = require('@models/Product');
 const path = require('path');
 const fs = require('fs');
+const { welcomeMail } = require('@services/mailNotification');
 // const { v4: uuidv4 } = require('uuid');
 const { cloudinary } = require('@services/fileUpload');
 
@@ -235,47 +236,121 @@ module.exports = {
       return response.error(res, error);
     }
   },
-   register: async (req, res) => {
+  register: async (req, res) => {
     try {
-      const { firstName, lastName, email, password, role } = req.body;
-
-     
+      console.log('Registration request received:', req.body);
+      
+      // Trim all string inputs to remove any accidental whitespace
+      const { firstName, lastName, email, password, role = 'user' } = req.body;
+      
+      // Input validation
       if (!firstName || !lastName || !email || !password) {
-        return res.status(400).json({ 
-          message: 'First name, last name, email, and password are required' 
-        });
+        const error = new Error('First name, last name, email, and password are required');
+        error.status = 400;
+        throw error;
+      }
+
+      // Trim and validate email format
+      const trimmedEmail = email.trim().toLowerCase();
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(trimmedEmail)) {
+        const error = new Error('Please enter a valid email address');
+        error.status = 400;
+        throw error;
       }
 
       if (password.length < 6) {
-        return res
-          .status(400)
-          .json({ message: 'Password must be at least 6 characters long' });
+        const error = new Error('Password must be at least 6 characters long');
+        error.status = 400;
+        throw error;
       }
 
-      const existingUser = await User.findOne({ email });
+      // Check if user already exists
+      const existingUser = await User.findOne({ email: trimmedEmail });
       if (existingUser) {
-        return res.status(400).json({ message: 'User already exists' });
+        const error = new Error('A user with this email already exists');
+        error.status = 400;
+        throw error;
       }
 
+      // Create new user
       const newUser = new User({
-        firstName,
-        lastName,
-        email,
-        role,
+        firstName: firstName.trim(),
+        lastName: lastName.trim(),
+        email: trimmedEmail,
+        role: role === 'admin' ? 'user' : role, // Prevent admin role assignment during registration
+        status: 'active' // Explicitly set status to active
       });
       
+      // Hash password
       newUser.password = newUser.encryptPassword(password);
+      
+      // Validate the user document before saving
+      try {
+        await newUser.validate();
+      } catch (validationError) {
+        console.error('Validation error:', validationError);
+        throw validationError;
+      }
+      
+      // Save user to database
       await newUser.save();
 
+      // Get user without password for response
       const userResponse = await User.findById(newUser._id).select('-password');
 
-      response.created(res, {
-        message: 'User registered successfully',
+      // Send welcome email (async - don't wait for it)
+      try {
+        console.log('Attempting to send welcome email to:', newUser.email);
+        const emailInfo = {
+          name: `${newUser.firstName} ${newUser.lastName}`.trim(),
+          email: newUser.email
+        };
+        console.log('Email details:', emailInfo);
+        
+        await welcomeMail(emailInfo);
+        console.log('Welcome email sent successfully to:', newUser.email);
+      } catch (emailError) {
+        console.error('Failed to send welcome email. Error details:', {
+          message: emailError.message,
+          stack: emailError.stack,
+          response: emailError.response,
+          code: emailError.code,
+          email: newUser.email,
+          time: new Date().toISOString()
+        });
+      }
+
+      console.log('User registered successfully:', {
+        id: userResponse._id,
+        email: userResponse.email,
+        name: `${userResponse.firstName} ${userResponse.lastName}`,
+        role: userResponse.role,
+        status: userResponse.status,
+        createdAt: userResponse.createdAt
+      });
+      
+      return res.status(201).json({
+        success: true,
+        message: 'Registration successful! Welcome to Merk!',
         user: userResponse,
       });
     } catch (error) {
-      console.error(error);
-      response.error(res, error);
+      console.error('Registration error:', {
+        message: error.message,
+        stack: error.stack,
+        name: error.name,
+        errors: error.errors
+      });
+      
+      const status = error.status || 500;
+      const message = status === 400 ? error.message : 'An error occurred during registration';
+      
+      return res.status(status).json({
+        success: false,
+        message: message,
+        error: process.env.NODE_ENV === 'development' ? error.message : undefined
+      });
     }
   },
 

@@ -74,7 +74,28 @@ createProduct: async (req, res) => {
                 .replace(/ /g, "-")
                 .replace(/[^\w-]+/g, "");
         }
-        
+
+        // Generate SKU if not provided
+        if (!payload.sku) {
+            const prefix = payload.name.substring(0, 3).toUpperCase();
+            const randomNum = Math.floor(1000 + Math.random() * 9000);
+            payload.sku = `${prefix}-${randomNum}`;
+        }
+
+        // Ensure stock is a number
+        if (payload.stock) {
+            payload.stock = parseInt(payload.stock, 10) || 0;
+        } else {
+            payload.stock = 0;
+        }
+
+        // Ensure model is a string
+        if (payload.model) {
+            payload.model = payload.model.toString();
+        } else {
+            payload.model = "";
+        }
+
         console.log('Final payload:', payload);
         
         
@@ -130,8 +151,20 @@ createProduct: async (req, res) => {
 
     
       let query = {
-        status: "verified" // Only show verified products
+        // For non-admin users, only show verified and non-suspended products
+        status: "verified",
+        is_verified: true
       };
+      
+      // For admin users, show all products except suspended ones by default
+      if (req.user && req.user.role === 'admin') {
+        delete query.is_verified;
+        delete query.status;
+        // Only filter out suspended products if not specifically requested
+        if (req.query.include_suspended !== 'true') {
+          query.status = { $ne: 'suspended' };
+        }
+      }
       
       if (req.query.seller_id) {
         query.userid = req.query.seller_id;
@@ -326,7 +359,21 @@ createProduct: async (req, res) => {
   getProductBycategoryId: async (req, res) => {
     console.log(req.query);
     try {
-      let cond = { status: "verified" };
+      let cond = {
+        // For non-admin users, only show verified and non-suspended products
+        status: "verified",
+        is_verified: true
+      };
+
+      // For admin users, show all products except suspended ones by default
+      if (req.user && req.user.role === 'admin') {
+        delete cond.is_verified;
+        delete cond.status;
+        // Only filter out suspended products if not specifically requested
+        if (req.query.include_suspended !== 'true') {
+          cond.status = { $ne: 'suspended' };
+        }
+      }
 
       // Filter by category
       if (req?.query?.category && req?.query?.category !== "all") {
@@ -550,6 +597,112 @@ updateProduct: async (req, res) => {
     }
 },
 
+  // Generate delivery label for a sold product
+  generateDeliveryLabel: async (req, res) => {
+    try {
+      const { productId, orderId, customerName, customerAddress, customerPhone } = req.body;
+      
+      const product = await Product.findById(productId);
+      if (!product) {
+        return response.error(res, { message: 'Product not found' }, 404);
+      }
+
+      // Create delivery label content
+      const deliveryLabel = {
+        orderId,
+        productName: product.name,
+        productSKU: product.sku,
+        productModel: product.model,
+        customerName,
+        customerAddress,
+        customerPhone,
+        shippingDate: new Date(),
+        trackingNumber: `TRK-${Date.now()}`
+      };
+
+      // Update product with delivery label
+      product.deliveryLabel = JSON.stringify(deliveryLabel);
+      await product.save();
+
+      // Invalidate cache
+      cache.delete('products');
+
+      return response.success(res, { 
+        message: 'Delivery label generated successfully',
+        deliveryLabel: deliveryLabel,
+        printUrl: `/api/products/${productId}/delivery-label/print`
+      });
+    } catch (error) {
+      console.error('Error generating delivery label:', error);
+      return response.error(res, { message: 'Error generating delivery label' });
+    }
+  },
+
+  // Print delivery label
+  printDeliveryLabel: async (req, res) => {
+    try {
+      const { productId } = req.params;
+      const product = await Product.findById(productId);
+      
+      if (!product || !product.deliveryLabel) {
+        return response.error(res, { message: 'Delivery label not found' }, 404);
+      }
+
+      const label = JSON.parse(product.deliveryLabel);
+      
+      // Set content type to PDF for printing
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename=delivery-${label.orderId}.pdf`);
+      
+      // Here you would typically use a PDF generation library like pdfkit or puppeteer
+      // This is a simplified example
+      res.send(`
+        <html>
+          <head>
+            <title>Delivery Label - ${label.orderId}</title>
+            <style>
+              body { font-family: Arial, sans-serif; margin: 20px; }
+              .label { border: 1px solid #000; padding: 15px; max-width: 500px; margin: 0 auto; }
+              .header { text-align: center; margin-bottom: 20px; }
+              .section { margin-bottom: 15px; }
+              .section-title { font-weight: bold; margin-bottom: 5px; }
+            </style>
+          </head>
+          <body>
+            <div class="label">
+              <div class="header">
+                <h2>SHIPPING LABEL</h2>
+                <p>Order #${label.orderId} | ${new Date(label.shippingDate).toLocaleDateString()}</p>
+              </div>
+              
+              <div class="section">
+                <div class="section-title">SHIP TO:</div>
+                <div>${label.customerName}</div>
+                <div>${label.customerAddress}</div>
+                <div>Phone: ${label.customerPhone}</div>
+              </div>
+              
+              <div class="section">
+                <div class="section-title">PRODUCT DETAILS:</div>
+                <div>${label.productName}</div>
+                <div>SKU: ${label.productSKU}</div>
+                <div>Model: ${label.productModel}</div>
+              </div>
+              
+              <div class="section">
+                <div class="section-title">TRACKING #:</div>
+                <div>${label.trackingNumber}</div>
+              </div>
+            </div>
+          </body>
+        </html>
+      `);
+    } catch (error) {
+      console.error('Error printing delivery label:', error);
+      return response.error(res, { message: 'Error printing delivery label' });
+    }
+  },
+
   topselling: async (req, res) => {
     try {
       let product = await Product.find({ is_top: true });
@@ -679,8 +832,60 @@ updateProduct: async (req, res) => {
         // sellerOrders[sellerId].total = baseTotal + taxAmount;
 
         const newOrder = new ProductRequest(sellerOrders[sellerId]);
-        await newOrder.save();
-        savedOrders.push(newOrder);
+        console.log('🚀 Creating order for seller:', sellerId);
+        const savedOrder = await newOrder.save();
+        savedOrders.push(savedOrder);
+        console.log('✅ Order created successfully. Order ID:', savedOrder._id);
+        
+        // Generate delivery label for each product in the order
+        console.log('📦 Starting delivery label generation for order items:', sellerOrders[sellerId].productDetail.length);
+        
+        for (const [index, item] of sellerOrders[sellerId].productDetail.entries()) {
+            try {
+                console.log(`\n🔍 Processing product ${index + 1}/${sellerOrders[sellerId].productDetail.length}:`);
+                console.log('   - Product ID:', item.product);
+                console.log('   - Product Name:', item.name || 'N/A');
+                
+                const deliveryLabelData = {
+                    orderId: savedOrder._id,
+                    productName: item.name || 'Product',
+                    productSKU: item.sku || 'N/A',
+                    productModel: item.model || 'N/A',
+                    customerName: payload.shipping_address?.name || 'Customer',
+                    customerAddress: `${payload.shipping_address?.address || ''}, ${payload.shipping_address?.city || ''}`.trim(),
+                    customerPhone: payload.shipping_address?.phone || 'N/A',
+                    shippingDate: new Date(),
+                    trackingNumber: `TRK-${Date.now()}-${Math.floor(Math.random() * 1000)}`
+                };
+                
+                console.log('📝 Delivery label data:', JSON.stringify(deliveryLabelData, null, 2));
+                
+                const updatedProduct = await Product.findByIdAndUpdate(
+                    item.product,
+                    { $set: { deliveryLabel: JSON.stringify(deliveryLabelData) } },
+                    { new: true }
+                );
+                
+                if (updatedProduct) {
+                    console.log('✅ Successfully updated product with delivery label');
+                    console.log('   - Product after update:', {
+                        _id: updatedProduct._id,
+                        name: updatedProduct.name,
+                        hasDeliveryLabel: !!updatedProduct.deliveryLabel,
+                        deliveryLabelLength: updatedProduct.deliveryLabel ? updatedProduct.deliveryLabel.length : 0
+                    });
+                } else {
+                    console.error('❌ Failed to update product - Product not found');
+                }
+            } catch (error) {
+                console.error('❌ Error generating delivery label for product:', {
+                    productId: item.product,
+                    error: error.message,
+                    stack: error.stack
+                });
+                // Continue with other products even if one fails
+            }
+        }
 
         // Update sold_pieces for each product
         for (const productItem of sellerOrders[sellerId].productDetail) {
@@ -1087,11 +1292,17 @@ createProductRequest: async (req, res) => {
       return res.status(200).json(cachedData.data);
     }
 
+   // Define the base query
+   const query = {
+     status: "verified",
+     is_verified: true,  // Only show verified products
+     sold_pieces: { $gt: 0 } 
+   };
    
-    const query = {
-      status: "verified", 
-      sold_pieces: { $gt: 0 } 
-    };
+   // For admin users, show all products regardless of verification status
+   if (req.user && req.user.role === 'admin') {
+     delete query.is_verified;
+   }
 
     // Use aggregation pipeline for better performance
     const products = await Product.aggregate([
@@ -2095,18 +2306,18 @@ getSellerProductByAdmin: async (req, res) => {
     try {
       const { page = 1, limit = 20 } = req.query;
       const userId = req.user.id;
-      
-      
+
+      // Get orders for the user
       const orders = await ProductRequest.find({ user: userId })
         .populate({
           path: "productDetail.product",
-          select: "name price image" 
+          select: "name price image"
         })
         .limit(parseInt(limit))
         .sort({ createdAt: -1 })
         .lean();
-      
-      
+
+      // Get all product IDs from orders
       const allProductIds = [];
       orders.forEach(order => {
         if (order.productDetail && Array.isArray(order.productDetail)) {
@@ -2118,14 +2329,14 @@ getSellerProductByAdmin: async (req, res) => {
           });
         }
       });
-      
-      
+
+      // Get reviews for the products
       const reviews = await Review.find({
         product: { $in: allProductIds },
-        posted_by: userId  
+        posted_by: userId
       }).lean();
-      
-      
+
+      // Get review stats for the products
       const allReviews = await Review.aggregate([
         {
           $match: {
@@ -2140,8 +2351,8 @@ getSellerProductByAdmin: async (req, res) => {
           }
         }
       ]);
-      
-      
+
+      // Create a map of user reviews
       const userReviewMap = {};
       reviews.forEach(review => {
         userReviewMap[review.product.toString()] = {
@@ -2152,8 +2363,8 @@ getSellerProductByAdmin: async (req, res) => {
           _id: review._id
         };
       });
-      
-      // Create a map of productId to review stats (all users)
+
+      // Create a map of review stats
       const reviewStatsMap = {};
       allReviews.forEach(stat => {
         reviewStatsMap[stat._id.toString()] = {
@@ -2161,7 +2372,7 @@ getSellerProductByAdmin: async (req, res) => {
           averageRating: stat.averageRating
         };
       });
-      
+
       // Add review status to each product in each order
       const ordersWithReviews = orders.map(order => {
         if (order.productDetail && Array.isArray(order.productDetail)) {
@@ -2169,10 +2380,10 @@ getSellerProductByAdmin: async (req, res) => {
             const productId = item.product?._id?.toString() || item.product?.toString();
             const hasUserReview = productId && userReviewMap[productId];
             const stats = reviewStatsMap[productId] || { totalRatings: 0, averageRating: 0 };
-            
+
             return {
               ...item,
-              isRated: !!hasUserReview,  // True only if current user has reviewed
+              isRated: !!hasUserReview, // True only if current user has reviewed
               review: hasUserReview || null,
               rating: hasUserReview ? userReviewMap[productId].rating : 0,
               // Include review stats for the product
@@ -2185,7 +2396,7 @@ getSellerProductByAdmin: async (req, res) => {
         }
         return order;
       });
-      
+
       return response.success(res, ordersWithReviews);
     } catch (error) {
       console.error('Error in getrequestProductbyuser:', error);
@@ -2211,26 +2422,63 @@ getSellerProductByAdmin: async (req, res) => {
 
   suspendProduct: async (req, res) => {
     try {
+      console.log('=== suspendProduct called ===');
+      console.log('Product ID to suspend:', req.params.id);
+      console.log('User making request:', req.user ? req.user.role : 'No user in request');
+
       const { id } = req.params;
+      
+      // Find and update in one operation
+      const updatedProduct = await Product.findByIdAndUpdate(
+        id,
+        { 
+          $set: { 
+            status: "suspended",
+            is_verified: false  // Ensure is_verified is set to false when suspending
+          } 
+        },
+        { new: true }
+      );
 
-      const product = await Product.findById(id);
-
-      if (!product) {
+      if (!updatedProduct) {
+        console.error('Product not found with ID:', id);
         return res.status(404).json({ message: "Product not found" });
       }
 
-      if (product.status === "suspended") {
-        return res
-          .status(200)
-          .json({ message: "Product is already suspended" });
-      }
+      console.log('Successfully suspended product:', {
+        _id: updatedProduct._id,
+        name: updatedProduct.name,
+        status: updatedProduct.status,
+        is_verified: updatedProduct.is_verified
+      });
 
-      product.status = "suspended";
-      const updatedProduct = await product.save();
+      // Clear relevant caches
+      const cacheKeys = Array.from(cache.keys());
+      console.log(`Clearing cache. Total cache entries: ${cacheKeys.length}`);
+      
+      const clearedCaches = [];
+      cacheKeys.forEach(key => {
+        if (key.startsWith('topSoldProducts_') || key.startsWith('products_')) {
+          cache.delete(key);
+          clearedCaches.push(key);
+        }
+      });
+      
+      console.log(`Cleared ${clearedCaches.length} cache entries`);
+      console.log('=== suspendProduct completed ===\n');
 
-      res.status(200).json(updatedProduct);
+      res.status(200).json({
+        success: true,
+        message: 'Product suspended successfully',
+        product: updatedProduct
+      });
     } catch (error) {
-      res.status(500).json({ message: error.message });
+      console.error('Error in suspendProduct:', error);
+      res.status(500).json({ 
+        success: false,
+        message: 'Server error',
+        error: error.message 
+      });
     }
   },
 
@@ -2379,35 +2627,132 @@ getSellerProductByAdmin: async (req, res) => {
         email: seller.email,
         orderId: orderId,
       });
+      
       return response.success(res, {
         message: "Reminder email sent to seller successfully",
       });
     } catch (error) {
-      console.log("Error in reminderSellerForReturn:", error);
+      console.error("Error in reminderSellerForReturn:", error);
       return response.error(res, error);
     }
   },
-   getProductBySale: async (req, res) => {
-        try {
+  updateProductStatus: async (req, res) => {
+    try {
+      console.log('=== updateProductStatus called ===');
+      console.log('Request body:', JSON.stringify(req.body, null, 2));
+      console.log('User making request:', req.user ? req.user.role : 'No user in request');
 
-            const flashSales = await FlashSale.find();
+      const { id, status } = req.body;
 
-            if (!flashSales || flashSales.length === 0) {
-                return response.ok(res, []);
-            }
+      if (!id || !status || !['verified', 'suspended', 'rejected', 'pending'].includes(status)) {
+        const errorMsg = `Invalid request: ${!id ? 'Missing product ID' : 'Invalid status'}`;
+        console.error(errorMsg);
+        return response.error(res, { 
+          message: 'Product ID and valid status (verified/suspended/rejected/pending) are required' 
+        }, 400);
+      }
 
-            const productIds = flashSales.flatMap(flashSale => flashSale.products);
-            if (!productIds || productIds.length === 0) {
-                return response.ok(res, []);
-            }
+      // Log current state before update
+      const currentProduct = await Product.findById(id);
+      console.log('Current product state:', {
+        _id: currentProduct?._id,
+        name: currentProduct?.name,
+        current_status: currentProduct?.status,
+        current_is_verified: currentProduct?.is_verified
+      });
 
-            const productDetails = await Product.find({ _id: { $in: productIds } });
+      // Prepare update object
+      const updateData = { status };
+      
+      // Update is_verified based on status
+      if (status === 'verified') {
+        updateData.is_verified = true;
+        console.log(`Updating product ${id} to verified status`);
+      } else if (['suspended', 'rejected', 'pending'].includes(status)) {
+        updateData.is_verified = false;
+        console.log(`Updating product ${id} to ${status} status`);
+      }
 
-            return response.ok(res, productDetails);
+      console.log('Update data:', updateData);
 
-        } catch (error) {
-            console.error("Error fetching products by sale:", error);
-            return response.error(res, error);
+      const product = await Product.findByIdAndUpdate(
+        id,
+        updateData,
+        { new: true }
+      );
+
+      if (!product) {
+        console.error(`Product not found with ID: ${id}`);
+        return response.error(res, { message: 'Product not found' }, 404);
+      }
+
+      console.log('Successfully updated product:', {
+        _id: product._id,
+        name: product.name,
+        new_status: product.status,
+        new_is_verified: product.is_verified,
+        updatedAt: product.updatedAt
+      });
+
+      // Clear relevant caches
+      const cacheKeys = Array.from(cache.keys());
+      console.log(`Clearing cache. Total cache entries: ${cacheKeys.length}`);
+      
+      const clearedCaches = [];
+      cacheKeys.forEach(key => {
+        if (key.startsWith('topSoldProducts_') || key.startsWith('products_')) {
+          cache.delete(key);
+          clearedCaches.push(key);
         }
+      });
+      
+      console.log(`Cleared ${clearedCaches.length} cache entries:`, clearedCaches);
+      console.log('=== updateProductStatus completed ===\n');
+
+      // Clear cache for product lists
+      cache.clear();
+
+      return response.success(res, { 
+        message: `Product ${status} successfully`,
+        product 
+      });
+    } catch (error) {
+      console.error('Error updating product status:', error);
+      return response.error(res, error);
     }
+  },
+
+  getProductBySale: async (req, res) => {
+    try {
+      const { saleId } = req.params;
+      
+      const products = await Product.find({
+        'sale.sale_id': saleId,
+        'sale.is_active': true
+      });
+
+      return response.success(res, products);
+    } catch (error) {
+      console.error('Error in getProductBySale:', error);
+      return response.error(res, error);
+    }
+  },
+
+  uploadImages: async (req, res) => {
+    try {
+      if (!req.files || req.files.length === 0) {
+        return response.error(res, { message: 'No images uploaded' }, 400);
+      }
+
+      const imageUrls = req.files.map(file => file.path);
+      
+      return response.success(res, { 
+        message: 'Images uploaded successfully',
+        images: imageUrls 
+      });
+    } catch (error) {
+      console.error('Error uploading images:', error);
+      return response.error(res, error);
+    }
+  }
 };

@@ -36,6 +36,25 @@ const productchema = new mongoose.Schema({
     },
     name: {
         type: String,
+        required: true
+    },
+    sku: {
+        type: String,
+        unique: true,
+        sparse: true
+    },
+    model: {
+        type: String,
+        default: ""
+    },
+    stock: {
+        type: Number,
+        required: true,
+        default: 0,
+        min: 0
+    },
+    deliveryLabel: {
+        type: String
     },
     slug: {
         type: String,

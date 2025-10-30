@@ -10,10 +10,14 @@ cloudinary.config({
 
 const storage = new CloudinaryStorage({
     cloudinary: cloudinary,
-    params: {
-        folder: "merk_uploads",
-        format: async (req, file) => "png",
-        public_id: (req, file) => Date.now() + "-" + file.originalname,
+    params: (req, file) => {
+        const isPDF = file.mimetype === 'application/pdf';
+        return {
+            folder: "merk_uploads",
+            resource_type: isPDF ? 'raw' : 'image',
+            format: isPDF ? 'pdf' : 'png',
+            public_id: Date.now() + "-" + file.originalname,
+        };
     },
 });
 
@@ -27,10 +31,10 @@ module.exports = {
             fields: 20                     
         },
         fileFilter: (req, file, cb) => {
-            if (file.mimetype.startsWith('image/')) {
+            if (file.mimetype.startsWith('image/') || file.mimetype === 'application/pdf') {
                 cb(null, true);
             } else {
-                cb(new Error('Only image files are allowed!'), false);
+                cb(new Error('Only image and PDF files are allowed!'), false);
             }
         }
     }),  

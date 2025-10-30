@@ -57,7 +57,9 @@ router.get("/orderhistoryfordriver", authMiddleware(["user", "admin", "seller", 
 router.get("/orderhistoryforvendor", authMiddleware(["user", "admin", "seller", "driver"]), product.orderhistoryforvendor);
 router.get("/getProductRequestbyUser", authMiddleware(["user", "admin", "seller", "employee"]), product.getrequestProductbyuser);
 router.get("/getAlluploadproduct", product.uploadProducts);
-router.post("/Suspend/:id", authMiddleware(["user", "admin", "seller"]), product.suspendProduct);
+router.post("/suspend/:id", authMiddleware(["user", "admin", "seller"]), product.suspendProduct);
+router.post("/updateProductStatus", authMiddleware(["admin", "seller"]), product.updateProductStatus);
+router.post("/uploadImages", authMiddleware(["user", "admin", "seller"]), upload.array('images', 10), product.uploadImages);
 router.get("/getdriveramount", product.getdriveramount);
 router.get("/getdriverpendingamount/:id", product.getdriverpendingamount);
 router.get("/collectcash/:id", authMiddleware(["user", "admin", "seller", "driver"]), product.collectcash);
@@ -65,5 +67,9 @@ router.post("/assignOrder", authMiddleware(["seller"]), product.assignOrderToEmp
 router.post("/getOrderByEmployee", authMiddleware(["employee"]), product.getOrderByEmployee);
 router.post("/getOrderHistoryByEmployee", authMiddleware(["employee"]), product.getOrderHistoryByEmployee);
 router.post("/reminderSellerForReturn", authMiddleware(["admin"]), product.reminderSellerForReturn);
+
+// Delivery label routes
+router.post("/generate-delivery-label", authMiddleware(["admin", "seller"]), product.generateDeliveryLabel);
+router.get("/:productId/delivery-label/print", authMiddleware(["admin", "seller"]), product.printDeliveryLabel);
 
 module.exports = router;
