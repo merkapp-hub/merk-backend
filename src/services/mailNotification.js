@@ -2,7 +2,7 @@ const nodemailer = require("nodemailer");
 
 function currencySign(amount) {
   if (amount == null || isNaN(amount)) {
-      return '$0';
+    return '$0';
   }
   return `$${amount}`;
 }
@@ -19,7 +19,7 @@ const transporter = nodemailer.createTransport({
 });
 
 // Verify connection configuration
-transporter.verify(function(error, success) {
+transporter.verify(function (error, success) {
   if (error) {
     console.error('SMTP Connection Error:', error);
   } else {
@@ -42,7 +42,7 @@ const sendMail = async (to, subject, html) => {
       subject,
       html,
     });
-    
+
     console.log('Message sent: %s', info.messageId);
     console.log('Preview URL: %s', nodemailer.getTestMessageUrl(info));
     return info;
@@ -77,7 +77,7 @@ module.exports = {
                     <div style="position: absolute; top: -50px; right: -50px; width: 200px; height: 200px; background-color: rgba(229, 143, 20, 0.1); border-radius: 50%;"></div>
                     <div style="position: absolute; bottom: -30px; left: -30px; width: 120px; height: 120px; background-color: rgba(229, 143, 20, 0.15); border-radius: 50%;"></div>
                     
-                    <h1 style="margin: 0; color: #ffffff; font-size: 42px; font-weight: 700; letter-spacing: -1px; position: relative; z-index: 1;">
+                    <h1 style="margin: 0; color: #000000; font-size: 42px; font-weight: 700; letter-spacing: -1px; position: relative; z-index: 1;">
                       Welcome to <span style="color: #E58F14;">Merk</span>
                     </h1>
                     <p style="margin: 15px 0 0; color: rgba(255, 255, 255, 0.9); font-size: 18px; font-weight: 400; position: relative; z-index: 1;">
@@ -200,7 +200,7 @@ module.exports = {
                   <!-- CTA Button -->
                   <div style="text-align: center; margin: 40px 0 20px;">
                     <a href="${process.env.FRONTEND_URL || 'https://www.merkapp.net'}" 
-                       style="display: inline-block; background: linear-gradient(135deg, #E58F14 0%, #f5a623 100%); color: #ffffff; text-decoration: none; padding: 16px 40px; border-radius: 30px; font-size: 16px; font-weight: 600; box-shadow: 0 4px 15px rgba(229, 143, 20, 0.3); transition: all 0.3s ease;">
+                       style="display: inline-block; background: linear-gradient(135deg, #E58F14 0%, #f5a623 100%); color: #000000; text-decoration: none; padding: 16px 40px; border-radius: 30px; font-size: 16px; font-weight: 600; box-shadow: 0 4px 15px rgba(229, 143, 20, 0.3); transition: all 0.3s ease;">
                       🛒 Start Shopping Now
                     </a>
                   </div>
@@ -253,10 +253,10 @@ module.exports = {
       </table>
     </body>
     </html>`;
-    
+
     await sendMail(details.email, `Welcome to Merk, ${firstName}! 🎉`, html);
   },
-  
+
   sendOTPmail: async ({ email, code }) => {
     console.log(email, code);
     try {
@@ -267,7 +267,7 @@ module.exports = {
       throw new Error("Could not send OTP mail");
     }
   },
-  
+
   passwordChange: async ({ email }) => {
     try {
       const html = `
@@ -287,7 +287,7 @@ module.exports = {
       throw new Error("Could not send OTP mail");
     }
   },
-  
+
   updateMail: async ({ email, confirmUrl }) => {
     try {
       const html = `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto;">
@@ -327,13 +327,13 @@ module.exports = {
           <p style="font-size: 12px; color: #aaa;">&copy; ${new Date().getFullYear()} Resaz. All rights reserved.</p>
         </div>
       `;
-  
+
       return await sendMail(email, "Your Profile Was Updated", html);
     } catch (err) {
       throw new Error("Could not send update notification email");
     }
   },
-  
+
   returnMail: async ({ email, returnAmount }) => {
     try {
       const html = `A refund has been processed for one of your orders. Amount: ${currencySign(returnAmount)}`;
@@ -343,7 +343,7 @@ module.exports = {
       throw new Error("Could not send mail");
     }
   },
-  
+
   returnReminderMail: async ({ email, orderId }) => {
     console.log("Sending return reminder mail to:", email);
     console.log("Order ID:", orderId);
@@ -355,12 +355,12 @@ module.exports = {
       throw new Error("Could not send mail");
     }
   },
-  
+
   sendNotification: async (userIds, title, description) => {
     try {
       const html = `<div> \r\n<p>Hello,<\/p>\r\n\r\n<p> ${description} <\/p>\r\n<\/br>Thanks,<\/p>\r\n\r\n<p><b>The Resaz Account Team<\/b><\/p><\/div>`;
       for (const userId of userIds) {
-          await sendMail(userId, title, html);
+        await sendMail(userId, title, html);
       }
     } catch (err) {
       console.error("Mail error:", err);
