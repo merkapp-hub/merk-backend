@@ -34,11 +34,8 @@ module.exports = {
 
 createProduct: async (req, res) => {
     try {
-        
-        
         const payload = req?.body || {};
         
-     
         const parseJSONField = (field, defaultValue = []) => {
             if (field && typeof field === 'string') {
                 try {
@@ -55,18 +52,31 @@ createProduct: async (req, res) => {
         payload.attributes = parseJSONField(payload.attributes, []);
         payload.varients = parseJSONField(payload.varients, []);
         
+        // Handle hasVariants flag
+        payload.hasVariants = payload.hasVariants === 'true' || payload.hasVariants === true;
         
         if (payload.category && typeof payload.category === 'string') {
             payload.category = payload.category.trim();
         }
         
+        // Handle images from file uploads
+        let uploadedImages = [];
         if (req.files && req.files.length > 0) {
-            const imageUrls = req.files.map(file => file.path);
-            payload.images = imageUrls;
-            console.log('Uploaded images:', imageUrls);
+            uploadedImages = req.files.map(file => file.path);
+            console.log('Uploaded images from files:', uploadedImages);
         }
         
-       
+        // Handle images from URLs (for normal products)
+        let urlImages = [];
+        if (payload.imageUrls) {
+            urlImages = parseJSONField(payload.imageUrls, []);
+            console.log('Images from URLs:', urlImages);
+        }
+        
+        // Combine both file uploads and URL images
+        payload.images = [...uploadedImages, ...urlImages];
+        console.log('Final images array:', payload.images);
+        
         if (payload.name) {
             payload.slug = payload.name
                 .toLowerCase()
@@ -96,8 +106,33 @@ createProduct: async (req, res) => {
             payload.model = "";
         }
 
+        // Validate pricing based on product type
+        if (payload.hasVariants) {
+            // For variant products, ensure each variant has pricing
+            if (!payload.varients || payload.varients.length === 0) {
+                return response.error(res, {
+                    message: 'Products with variants must have at least one variant'
+                }, 400);
+            }
+            
+            // Validate each variant has price
+            for (let variant of payload.varients) {
+                if (!variant.price || variant.price <= 0) {
+                    return response.error(res, {
+                        message: 'Each variant must have a valid price'
+                    }, 400);
+                }
+            }
+        } else {
+            // For normal products, ensure price_slot has pricing
+            if (!payload.price_slot || payload.price_slot.length === 0 || !payload.price_slot[0].price) {
+                return response.error(res, {
+                    message: 'Normal products must have a price'
+                }, 400);
+            }
+        }
+
         console.log('Final payload:', payload);
-        
         
         let product = new Product(payload);
         const savedProduct = await product.save();
@@ -111,7 +146,6 @@ createProduct: async (req, res) => {
         
     } catch (error) {
         console.error('Product creation error:', error);
-        
         
         if (error.name === 'ValidationError') {
             return response.error(res, {
@@ -540,8 +574,6 @@ updateProduct: async (req, res) => {
     try {
         const payload = req?.body || {};
         
-
-        
         // Parse JSON strings back to objects/arrays
         if (payload.price_slot && typeof payload.price_slot === 'string') {
             try {
@@ -559,11 +591,11 @@ updateProduct: async (req, res) => {
             }
         }
         
-       if (payload.category) {
-    if (typeof payload.category === 'string' && !payload.category.match(/^[0-9a-fA-F]{24}$/)) {
-        delete payload.category; // Invalid ObjectId format ko remove kar do
-    }
-}
+        if (payload.category) {
+            if (typeof payload.category === 'string' && !payload.category.match(/^[0-9a-fA-F]{24}$/)) {
+                delete payload.category;
+            }
+        }
         
         if (payload.varients && typeof payload.varients === 'string') {
             try {
@@ -573,10 +605,36 @@ updateProduct: async (req, res) => {
             }
         }
         
-        // Handle uploaded images
+        // Handle hasVariants flag
+        payload.hasVariants = payload.hasVariants === 'true' || payload.hasVariants === true;
+        
+        // Parse JSON helper
+        const parseJSONField = (field, defaultValue = []) => {
+            if (field && typeof field === 'string') {
+                try {
+                    return JSON.parse(field);
+                } catch (e) {
+                    return defaultValue;
+                }
+            }
+            return field || defaultValue;
+        };
+        
+        // Handle images from file uploads
+        let uploadedImages = [];
         if (req.files && req.files.length > 0) {
-            const imageUrls = req.files.map(file => file.path);
-            payload.images = imageUrls;
+            uploadedImages = req.files.map(file => file.path);
+        }
+        
+        // Handle images from URLs (for normal products)
+        let urlImages = [];
+        if (payload.imageUrls) {
+            urlImages = parseJSONField(payload.imageUrls, []);
+        }
+        
+        // Combine both file uploads and URL images
+        if (uploadedImages.length > 0 || urlImages.length > 0) {
+            payload.images = [...uploadedImages, ...urlImages];
         }
         
         if (payload.name) {
@@ -584,6 +642,29 @@ updateProduct: async (req, res) => {
                 .toLowerCase()
                 .replace(/ /g, "-")
                 .replace(/[^\w-]+/g, "");
+        }
+        
+        // Validate pricing based on product type
+        if (payload.hasVariants) {
+            if (!payload.varients || payload.varients.length === 0) {
+                return response.error(res, {
+                    message: 'Products with variants must have at least one variant'
+                }, 400);
+            }
+            
+            for (let variant of payload.varients) {
+                if (!variant.price || variant.price <= 0) {
+                    return response.error(res, {
+                        message: 'Each variant must have a valid price'
+                    }, 400);
+                }
+            }
+        } else {
+            if (!payload.price_slot || payload.price_slot.length === 0 || !payload.price_slot[0].price) {
+                return response.error(res, {
+                    message: 'Normal products must have a price'
+                }, 400);
+            }
         }
         
         let product = await Product.findByIdAndUpdate(payload?.id, payload, {
@@ -1638,7 +1719,7 @@ createProductRequest: async (req, res) => {
         // await mailNotification.sendMail(
         //   order.user,
         //   "Refund Requested",
-        //   `Your refund for a non-returnable item was processed successfully. Amount: ₹${returnAmount}`
+        //   `Your refund for a non-returnable item was processed successfully. Amount: $${returnAmount}`
         // );
         await mailNotification.returnMail({
           email: order.seller_id.email,
@@ -2738,21 +2819,44 @@ getSellerProductByAdmin: async (req, res) => {
     }
   },
 
-  uploadImages: async (req, res) => {
-    try {
-      if (!req.files || req.files.length === 0) {
-        return response.error(res, { message: 'No images uploaded' }, 400);
-      }
-
-      const imageUrls = req.files.map(file => file.path);
-      
-      return response.success(res, { 
-        message: 'Images uploaded successfully',
-        images: imageUrls 
-      });
-    } catch (error) {
-      console.error('Error uploading images:', error);
-      return response.error(res, error);
+uploadImages: async (req, res) => {
+  try {
+    console.log('=== Upload Images Request ===');
+    console.log('Files received:', req.files?.length || 0);
+    console.log('Content-Type:', req.headers['content-type']);
+    
+    if (!req.files || req.files.length === 0) {
+      console.log('ERROR: No files in request');
+      console.log('req.body:', req.body);
+      return response.error(res, { message: 'No images uploaded' }, 400);
     }
+    
+    console.log('Processing files...');
+    const imageUrls = req.files.map((file, index) => {
+      console.log(`File ${index + 1}:`, {
+        originalname: file.originalname,
+        mimetype: file.mimetype,
+        size: file.size,
+        path: file.path
+      });
+      return file.path;
+    });
+    
+    console.log('Upload successful. URLs:', imageUrls);
+    
+    return response.success(res, { 
+      message: 'Images uploaded successfully',
+      images: imageUrls 
+    });
+  } catch (error) {
+    console.error('=== Upload Error ===');
+    console.error('Error message:', error.message);
+    console.error('Error stack:', error.stack);
+    return response.error(res, { 
+      message: 'Something went wrong!',
+      error: error.message 
+    });
   }
+}
+
 };

@@ -62,6 +62,10 @@ const productchema = new mongoose.Schema({
     image: {
         type: String,
     },
+    images: {
+        type: [String],
+        default: []
+    },
     short_description: {
         type: String,
     },
@@ -76,8 +80,22 @@ const productchema = new mongoose.Schema({
         type: Number,
         default: 0
     },
-    varients: {
-        type: [],
+    varients: [{
+        color: String,
+        image: [String],
+        selected: [],
+        price: {
+            type: Number,
+            default: 0
+        },
+        Offerprice: {
+            type: Number,
+            default: 0
+        }
+    }],
+    hasVariants: {
+        type: Boolean,
+        default: false
     },
     minQuantity: {
         type: Number

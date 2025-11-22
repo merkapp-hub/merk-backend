@@ -129,6 +129,7 @@ module.exports = {
       }
 
       let users = await User.find(matchStage)
+        .sort({ createdAt: -1 }) // Sort by createdAt in descending order (newest first)
         .skip(skip)
         .limit(limit)
         .lean(); // Use lean() for better performance
