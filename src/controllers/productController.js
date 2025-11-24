@@ -1513,7 +1513,8 @@ createProductRequest: async (req, res) => {
             sponsered: 1,
             status: 1,
             createdAt: 1,
-            userid: 1
+            userid: 1,
+            stock: 1
           }
         }
       ]);

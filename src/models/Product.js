@@ -33,6 +33,7 @@ const productchema = new mongoose.Schema({
     },
     expirydate: {
         type: Date,
+        default: null
     },
     name: {
         type: String,

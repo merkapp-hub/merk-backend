@@ -21,7 +21,9 @@ router.delete(
 
 router.get("/getFlashSale", FlashSale.getFlashSale);
 router.get("/getOneFlashSalePerSeller", FlashSale.getOneFlashSalePerSeller);
-router.get('/getFlashSaleBySlug/:slug',FlashSale.getFlashSaleBySlug)
+router.get('/getFlashSaleBySlug/:slug', FlashSale.getFlashSaleBySlug);
+router.get('/getSaleById/:id', authMiddleware(["seller", "admin"]), FlashSale.getSaleById);
+router.post('/updateSale', authMiddleware(["seller", "admin"]), FlashSale.updateSale);
 
 router.post(
     "/deleteFlashSaleProduct",

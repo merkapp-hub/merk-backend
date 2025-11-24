@@ -228,5 +228,74 @@ getFlashSaleBySlug: async (req, res) => {
     }
   },
 
+  getSaleById: async (req, res) => {
+    try {
+      const { id } = req.params;
+      
+      const sale = await FlashSale.findById(id).populate('products');
+      
+      if (!sale) {
+        return res.status(404).json({
+          success: false,
+          message: "Sale not found",
+        });
+      }
+
+      return res.status(200).json({
+        success: true,
+        status: true,
+        data: sale,
+        message: "Sale retrieved successfully",
+      });
+    } catch (error) {
+      console.log(error);
+      return res.status(500).json({
+        success: false,
+        message: "Something went wrong",
+        error,
+      });
+    }
+  },
+
+  updateSale: async (req, res) => {
+    try {
+      const { saleId, ...updateData } = req.body;
+      
+      if (!saleId) {
+        return res.status(400).json({
+          success: false,
+          message: "Sale ID is required",
+        });
+      }
+
+      const updatedSale = await FlashSale.findByIdAndUpdate(
+        saleId,
+        updateData,
+        { new: true, runValidators: true }
+      ).populate('products');
+
+      if (!updatedSale) {
+        return res.status(404).json({
+          success: false,
+          message: "Sale not found",
+        });
+      }
+
+      return res.status(200).json({
+        success: true,
+        status: true,
+        data: updatedSale,
+        message: "Sale updated successfully",
+      });
+    } catch (error) {
+      console.log(error);
+      return res.status(500).json({
+        success: false,
+        message: "Something went wrong",
+        error,
+      });
+    }
+  },
+
 };
 // 
