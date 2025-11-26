@@ -92,6 +92,11 @@ const productchema = new mongoose.Schema({
         Offerprice: {
             type: Number,
             default: 0
+        },
+        stock: {
+            type: Number,
+            default: 0,
+            min: 0
         }
     }],
     hasVariants: {

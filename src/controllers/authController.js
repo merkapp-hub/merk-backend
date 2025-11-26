@@ -609,6 +609,66 @@ deleteAccount : async (req, res) => {
 },
 
 // Export the uploadProfileImage function
-uploadProfileImage
+uploadProfileImage,
+
+// Update seller commission rate
+updateSellerCommission: async (req, res) => {
+  try {
+    const { sellerId, commissionRate } = req.body;
+
+    // Validation
+    if (!sellerId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Seller ID is required'
+      });
+    }
+
+    if (commissionRate === undefined || commissionRate === null) {
+      return res.status(400).json({
+        success: false,
+        message: 'Commission rate is required'
+      });
+    }
+
+    if (commissionRate < 0 || commissionRate > 100) {
+      return res.status(400).json({
+        success: false,
+        message: 'Commission rate must be between 0 and 100'
+      });
+    }
+
+    // Find seller
+    const seller = await User.findOne({ _id: sellerId, role: 'seller' });
+
+    if (!seller) {
+      return res.status(404).json({
+        success: false,
+        message: 'Seller not found'
+      });
+    }
+
+    // Update commission rate
+    seller.commissionRate = commissionRate;
+    await seller.save();
+
+    return res.status(200).json({
+      success: true,
+      message: 'Commission rate updated successfully',
+      data: {
+        sellerId: seller._id,
+        sellerName: `${seller.firstName} ${seller.lastName}`,
+        commissionRate: seller.commissionRate
+      }
+    });
+  } catch (error) {
+    console.error('Error updating seller commission:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Error updating commission rate',
+      error: error.message
+    });
+  }
+}
 
 };

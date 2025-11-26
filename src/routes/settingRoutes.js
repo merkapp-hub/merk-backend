@@ -12,4 +12,12 @@ router.delete("/deleteDeliveryTip", authMiddleware(["admin"]), setting.deleteDel
 router.get("/getDeliveryCharge", setting.getDeliveryCharge);
 router.get("/getDeliveryPartnerTip", setting.getDeliveryPartnerTips);
 
+// Tax routes
+router.get("/getTax", setting.getTax);
+router.put("/updateTax", authMiddleware(["admin"]), setting.updateTax);
+
+// Service fee routes
+router.get("/getServiceFee", setting.getServiceFee);
+router.put("/updateServiceFee", authMiddleware(["admin"]), setting.updateServiceFee);
+
 module.exports = router;

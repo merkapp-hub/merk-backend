@@ -980,8 +980,25 @@ updateProduct: async (req, res) => {
       
         if (payload.paymentmode === "pay" || payload.paymentmode === "cod") {
           const orderTotal = Number(sellerOrders[sellerId].total);
-          const adminFee = (orderTotal * 2) / 100;
+          
+          // Get seller's commission rate from database
+          const seller = await User.findById(sellerId);
+          
+          if (!seller) {
+            console.error(`❌ Seller not found with ID: ${sellerId}`);
+            throw new Error(`Seller not found: ${sellerId}`);
+          }
+          
+          const commissionRate = seller?.commissionRate || 15; // Default 15% if not set
+          
+          const adminFee = (orderTotal * commissionRate) / 100;
           const sellerEarnings = orderTotal - adminFee;
+          
+          console.log(`💰 [Order Creation] Seller: ${seller.firstName} ${seller.lastName}`);
+          console.log(`💰 [Order Creation] Commission Rate: ${commissionRate}%`);
+          console.log(`💰 [Order Creation] Order Total: ${orderTotal}`);
+          console.log(`💰 [Order Creation] Admin Fee: ${adminFee}`);
+          console.log(`💰 [Order Creation] Seller Earnings: ${sellerEarnings}`);
 
          
           await User.findByIdAndUpdate(
@@ -1236,9 +1253,24 @@ createProductRequest: async (req, res) => {
                 
                 if (payload.paymentmode === "pay" || payload.paymentmode === "cod") {
                     const orderTotal = Number(sellerOrders[sellerId].total);
-                    const adminFee = (orderTotal * 2) / 100; // Calculate 2% admin fee
+                    
+                    // Get seller's commission rate from database
+                    const seller = await User.findById(sellerId);
+                    
+                    if (!seller) {
+                        console.error(`❌ Seller not found with ID: ${sellerId}`);
+                        throw new Error(`Seller not found: ${sellerId}`);
+                    }
+                    
+                    const commissionRate = seller?.commissionRate || 15; // Default 15% if not set
+                    
+                    const adminFee = (orderTotal * commissionRate) / 100; // Calculate dynamic admin fee
                     const sellerEarnings = orderTotal - adminFee; // Deduct admin fee from seller's earnings
                     
+                    console.log(`💰 Seller ID: ${sellerId}`);
+                    console.log(`💰 Seller Name: ${seller.firstName} ${seller.lastName}`);
+                    console.log(`💰 Seller commission rate: ${commissionRate}%`);
+                    console.log(`💰 Order total: ${orderTotal}`);
                     console.log(`💰 Calculated admin fee: ${adminFee}`);
                     console.log(`💰 Calculated seller earnings: ${sellerEarnings}`);
                     

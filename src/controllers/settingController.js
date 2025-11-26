@@ -1,6 +1,8 @@
 const response = require("../responses");
 const Setting = require("@models/Setting");
 const Charge = require("@models/Charges");
+const Tax = require("@models/Tax");
+const Servicefee = require("@models/Servicefee");
 
 module.exports = {
   createSetting: async (req, res) => {
@@ -179,6 +181,116 @@ module.exports = {
       console.error("Error fetching delivery partner tips:", error);
       return response.error(res, {
         message: "Server error while fetching delivery partner tips",
+      });
+    }
+  },
+
+  // Tax APIs
+  getTax: async (req, res) => {
+    try {
+      let tax = await Tax.findOne({});
+      
+      // If no tax exists, create default one
+      if (!tax) {
+        tax = await Tax.create({ taxRate: 15 });
+      }
+      
+      return res.status(200).json({
+        success: true,
+        message: "Tax rate fetched successfully",
+        data: tax,
+        taxRate: tax.taxRate,
+      });
+    } catch (error) {
+      console.error("Error fetching tax:", error);
+      return response.error(res, {
+        message: "Server error while fetching tax rate",
+      });
+    }
+  },
+
+  updateTax: async (req, res) => {
+    try {
+      const { taxRate } = req.body;
+
+      if (taxRate == null || isNaN(taxRate) || taxRate < 0 || taxRate > 100) {
+        return res.status(400).json({
+          success: false,
+          message: "Valid tax rate (0-100) is required",
+        });
+      }
+
+      const updated = await Tax.findOneAndUpdate(
+        {},
+        { $set: { taxRate } },
+        { upsert: true, new: true }
+      );
+
+      return res.status(200).json({
+        success: true,
+        message: "Tax rate updated successfully",
+        data: updated,
+        taxRate: updated.taxRate,
+      });
+    } catch (error) {
+      console.error("Error updating tax:", error);
+      return response.error(res, {
+        message: "Server error while updating tax rate",
+      });
+    }
+  },
+
+  // Service Fee APIs
+  getServiceFee: async (req, res) => {
+    try {
+      let fee = await Servicefee.findOne({});
+      
+      // If no fee exists, create default one
+      if (!fee) {
+        fee = await Servicefee.create({ Servicefee: 0 });
+      }
+      
+      return res.status(200).json({
+        success: true,
+        message: "Service fee fetched successfully",
+        data: fee,
+        serviceFee: fee.Servicefee,
+      });
+    } catch (error) {
+      console.error("Error fetching service fee:", error);
+      return response.error(res, {
+        message: "Server error while fetching service fee",
+      });
+    }
+  },
+
+  updateServiceFee: async (req, res) => {
+    try {
+      const { serviceFee } = req.body;
+
+      if (serviceFee == null || isNaN(serviceFee) || serviceFee < 0) {
+        return res.status(400).json({
+          success: false,
+          message: "Valid service fee (>= 0) is required",
+        });
+      }
+
+      const updated = await Servicefee.findOneAndUpdate(
+        {},
+        { $set: { Servicefee: serviceFee } },
+        { upsert: true, new: true }
+      );
+
+      return res.status(200).json({
+        success: true,
+        message: "Service fee updated successfully",
+        data: updated,
+        serviceFee: updated.Servicefee,
+      });
+    } catch (error) {
+      console.error("Error updating service fee:", error);
+      return response.error(res, {
+        message: "Server error while updating service fee",
       });
     }
   },

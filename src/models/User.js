@@ -48,6 +48,13 @@ const userSchema = new mongoose.Schema(
       type: Number,
       default: 0,
     },
+    // Commission percentage for seller (set by admin)
+    commissionRate: {
+      type: Number,
+      default: 15, // Default 15% commission
+      min: 0,
+      max: 100,
+    },
     profilePicture: {
       type: String,
       default: ''
