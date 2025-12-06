@@ -57,6 +57,7 @@ module.exports = {
 
    const flashSales = await FlashSale.find({ SellerId }).populate({
   path: "products",
+  match: { is_verified: true },
   populate: {
     path: "category",
     select: "name" 
@@ -91,7 +92,10 @@ getFlashSaleBySlug: async (req, res) => {
     const allFlashSales = await FlashSale.find({}, 'slug');
     console.log("Available slugs:", allFlashSales.map(sale => sale.slug)); // Debug log
     
-    const flashSale = await FlashSale.findOne({ slug }).populate("products");
+    const flashSale = await FlashSale.findOne({ slug }).populate({
+      path: "products",
+      match: { is_verified: true }
+    });
     
     console.log("Found flash sale:", flashSale ? "Yes" : "No"); // Debug log
     
@@ -211,7 +215,10 @@ getFlashSaleBySlug: async (req, res) => {
 
       const populatedFlashSales = await FlashSale.populate(
         flashSales.map(f => f.flashSale),
-        { path: "products" }
+        { 
+          path: "products",
+          match: { is_verified: true }
+        }
       );
 
       return res.status(200).json({
@@ -232,7 +239,15 @@ getFlashSaleBySlug: async (req, res) => {
     try {
       const { id } = req.params;
       
-      const sale = await FlashSale.findById(id).populate('products');
+      // Populate products with their category information
+      const sale = await FlashSale.findById(id).populate({
+        path: 'products',
+        match: { is_verified: true },
+        populate: {
+          path: 'category',
+          select: 'name slug'
+        }
+      });
       
       if (!sale) {
         return res.status(404).json({
@@ -241,6 +256,9 @@ getFlashSaleBySlug: async (req, res) => {
         });
       }
 
+      console.log('Sale retrieved with products:', sale.products?.length);
+      console.log('First product category:', sale.products?.[0]?.category);
+
       return res.status(200).json({
         success: true,
         status: true,
@@ -248,11 +266,11 @@ getFlashSaleBySlug: async (req, res) => {
         message: "Sale retrieved successfully",
       });
     } catch (error) {
-      console.log(error);
+      console.error('getSaleById error:', error);
       return res.status(500).json({
         success: false,
         message: "Something went wrong",
-        error,
+        error: error.message,
       });
     }
   },
@@ -261,11 +279,26 @@ getFlashSaleBySlug: async (req, res) => {
     try {
       const { saleId, ...updateData } = req.body;
       
+      console.log('Update Sale Request:', { saleId, updateData });
+      
       if (!saleId) {
         return res.status(400).json({
           success: false,
           message: "Sale ID is required",
         });
+      }
+
+      // Validate dates if provided
+      if (updateData.startDateTime && updateData.endDateTime) {
+        const startDate = new Date(updateData.startDateTime);
+        const endDate = new Date(updateData.endDateTime);
+        
+        if (endDate <= startDate) {
+          return res.status(400).json({
+            success: false,
+            message: "End date must be after start date",
+          });
+        }
       }
 
       const updatedSale = await FlashSale.findByIdAndUpdate(
@@ -281,6 +314,8 @@ getFlashSaleBySlug: async (req, res) => {
         });
       }
 
+      console.log('Sale updated successfully:', updatedSale._id);
+
       return res.status(200).json({
         success: true,
         status: true,
@@ -288,11 +323,11 @@ getFlashSaleBySlug: async (req, res) => {
         message: "Sale updated successfully",
       });
     } catch (error) {
-      console.log(error);
+      console.error('Update Sale Error:', error);
       return res.status(500).json({
         success: false,
-        message: "Something went wrong",
-        error,
+        message: error.message || "Something went wrong",
+        error: error.toString(),
       });
     }
   },

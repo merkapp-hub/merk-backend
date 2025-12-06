@@ -292,7 +292,7 @@ createProduct: async (req, res) => {
 
   getSponseredProduct: async (req, res) => {
     try {
-      let data = { sponsered: true };
+      let data = { sponsered: true, is_verified: true };
       if (req.query.seller_id) {
         data.userid = req.query.seller_id;
       }
@@ -368,7 +368,7 @@ createProduct: async (req, res) => {
 
   compareProduct: async (req, res) => {
     try {
-      let product = await Product.find({ _id: { $in: req.body.ids } }).populate(
+      let product = await Product.find({ _id: { $in: req.body.ids }, is_verified: true }).populate(
         "category"
       );
       return response.success(res, product);
@@ -379,7 +379,7 @@ createProduct: async (req, res) => {
   getProductbycategory: async (req, res) => {
     try {
       const { page = 1, limit = 20 } = req.query;
-      let product = await Product.find({ category: req.params.id })
+      let product = await Product.find({ category: req.params.id, is_verified: true })
         .populate("category")
         .sort({ createdAt: -1 })
         .limit(limit * 1)
@@ -497,6 +497,7 @@ createProduct: async (req, res) => {
     try {
       let cond = {
         theme: { $in: [req?.params?.id] },
+        is_verified: true
       };
       let sort_by = {};
       if (req.query.is_top) {
@@ -786,7 +787,7 @@ updateProduct: async (req, res) => {
 
   topselling: async (req, res) => {
     try {
-      let product = await Product.find({ is_top: true });
+      let product = await Product.find({ is_top: true, is_verified: true });
       return response.success(res, product);
     } catch (error) {
       return response.error(res, error);
@@ -795,7 +796,7 @@ updateProduct: async (req, res) => {
 
   getnewitem: async (req, res) => {
     try {
-      let product = await Product.find({ is_new: true });
+      let product = await Product.find({ is_new: true, is_verified: true });
       return response.success(res, product);
     } catch (error) {
       return response.error(res, error);
@@ -2248,6 +2249,7 @@ getSellerProductByAdmin: async (req, res) => {
     try {
       const { page = 1, limit = 20 } = req.query;
       let cond = {
+        is_verified: true,
         $or: [
           { name: { $regex: req.query.key, $options: "i" } },
           { categoryName: { $regex: req.query.key, $options: "i" } },

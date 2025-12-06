@@ -135,8 +135,8 @@ const productchema = new mongoose.Schema({
     },
     status: {
         type: String,
-        enum: ["verified", "suspended"],
-        default: "verified",
+        enum: ["verified", "suspended", "pending"],
+        default: "pending",
     },
     attributes: [
         {

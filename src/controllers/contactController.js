@@ -29,12 +29,68 @@ exports.createContact = async (req, res) => {
 
 exports.getAllContacts = async (req, res) => {
   try {
-    const contacts = await Contact.find().sort({ createdAt: -1 });
+    // Pagination parameters
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 20;
+    const skip = (page - 1) * limit;
 
-    return response.success(res, contacts);
+    // Build search query
+    const query = {};
+
+    // Search by name (case-insensitive)
+    if (req.query.name) {
+      query.name = { $regex: req.query.name, $options: 'i' };
+    }
+
+    // Search by email (case-insensitive)
+    if (req.query.Email) {
+      query.Email = { $regex: req.query.Email, $options: 'i' };
+    }
+
+    // Filter by date
+    if (req.query.curDate) {
+      const searchDate = new Date(req.query.curDate);
+      const startOfDay = new Date(searchDate.setHours(0, 0, 0, 0));
+      const endOfDay = new Date(searchDate.setHours(23, 59, 59, 999));
+      
+      query.createdAt = {
+        $gte: startOfDay,
+        $lte: endOfDay
+      };
+    }
+
+    console.log('Contact Query:', query);
+    console.log('Pagination:', { page, limit, skip });
+
+    // Get total count for pagination
+    const totalContacts = await Contact.countDocuments(query);
+    const totalPages = Math.ceil(totalContacts / limit);
+
+    // Fetch contacts with pagination
+    const contacts = await Contact.find(query)
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit);
+
+    console.log('Found contacts:', contacts.length);
+
+    return res.status(200).json({
+      status: true,
+      data: contacts,
+      pagination: {
+        totalItems: totalContacts,
+        totalPages: totalPages,
+        currentPage: page,
+        itemsPerPage: limit
+      }
+    });
   } catch (error) {
     console.error("Error getting contacts:", error);
-    res.status(500).json({ message: "Internal Server Error" });
+    res.status(500).json({ 
+      status: false,
+      message: "Internal Server Error",
+      error: error.message 
+    });
   }
 };
 

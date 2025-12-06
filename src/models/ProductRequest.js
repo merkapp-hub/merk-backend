@@ -141,6 +141,13 @@ const productrequestchema = new mongoose.Schema(
     paymentmode: {
       type: String,
     },
+    paymentDetails: {
+      paypalOrderId: String,
+      paypalPayerId: String,
+      paymentStatus: String,
+      captureId: String,
+      transactionId: String,
+    },
     timeslot: {
       type: String,
     },
