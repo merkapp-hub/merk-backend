@@ -6,6 +6,11 @@ module.exports = {
   createFlashSale: async (req, res) => {
     try {
       const payload = req?.body || {};
+      
+      console.log('=== CREATE FLASH SALE ===');
+      console.log('Received payload:', JSON.stringify(payload, null, 2));
+      console.log('Products in payload:', payload.products);
+      console.log('Products length:', payload.products?.length);
 
       if (!payload.SellerId) {
         return res.status(400).json({
@@ -19,18 +24,31 @@ module.exports = {
       });
 
       if (existingSale) {
-        return res.status(400).json({
+        return res.status(200).json({
           success: false,
           message:
-            "A flash sale already exists for this seller. Please end it before creating a new one.",
+            "A flash sale already exists for this seller. Please end the current sale before creating a new one.",
+        });
+      }
+
+      // Validate dates
+      if (new Date(payload.endDateTime) <= new Date(payload.startDateTime)) {
+        return res.status(200).json({
+          success: false,
+          message: "End date must be after start date",
         });
       }
 
       const sale = new FlashSale(payload);
       const flashSale = await sale.save();
+      
+      console.log('Saved flash sale:', flashSale);
+      console.log('Saved products:', flashSale.products);
+      console.log('Saved products count:', flashSale.products?.length);
 
       return res.status(200).json({
         success: true,
+        status: true,
         data: flashSale,
         message: "Flash Sale added successfully",
       });
@@ -47,7 +65,8 @@ module.exports = {
  getFlashSale: async (req, res) => {
   try {
     const SellerId = req.query.SellerId;
-    console.log(SellerId);
+    console.log('Getting flash sale for seller:', SellerId);
+    
     if (!SellerId) {
       return res.status(400).json({
         success: false,
@@ -55,21 +74,27 @@ module.exports = {
       });
     }
 
-   const flashSales = await FlashSale.find({ SellerId }).populate({
-  path: "products",
-  match: { is_verified: true },
-  populate: {
-    path: "category",
-    select: "name" 
-  }
-});
+    const flashSales = await FlashSale.find({ SellerId })
+      .sort({ createdAt: -1 })
+      .populate({
+        path: "products",
+        match: { is_verified: true },
+        populate: {
+          path: "category",
+          select: "name slug" 
+        }
+      });
+
+    console.log('Found flash sales:', flashSales.length);
 
     return res.status(200).json({
       success: true,
+      status: true,
       data: flashSales,
       message: "Flash sales retrieved successfully"
     });
   } catch (error) {
+    console.error('getFlashSale error:', error);
     return res.status(500).json({
       success: false,
       message: error.message || "Internal server error"

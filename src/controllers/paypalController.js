@@ -5,9 +5,13 @@ const Product = require('@models/Product');
 // Create PayPal Order
 exports.createOrder = async (req, res) => {
   try {
+    console.log('🟢 [PayPal Backend] Create Order Request Received');
+    console.log('🟢 [PayPal Backend] Request Body:', JSON.stringify(req.body, null, 2));
+    
     const { items, total, shipping_address } = req.body;
 
     if (!items || items.length === 0) {
+      console.error('❌ [PayPal Backend] No items in cart');
       return res.status(400).json({
         status: false,
         message: 'Cart items are required'
@@ -19,24 +23,48 @@ exports.createOrder = async (req, res) => {
       return sum + (Number(item.price) * Number(item.qty));
     }, 0);
 
-    console.log('Items:', items);
-    console.log('Item Total Calculated:', itemTotal.toFixed(2));
-    console.log('Total Received:', total.toFixed(2));
+    console.log('🟢 [PayPal Backend] Items:', items);
+    console.log('🟢 [PayPal Backend] Item Total Calculated:', itemTotal.toFixed(2));
+    console.log('🟢 [PayPal Backend] Total Received:', total.toFixed(2));
+    console.log('🟢 [PayPal Backend] Shipping Address:', shipping_address);
 
-    // Build purchase units
+    // Calculate shipping (difference between total and item total)
+    const shippingCost = Number(total) - itemTotal;
+    console.log('🟢 [PayPal Backend] Shipping Cost:', shippingCost.toFixed(2));
+
+    // Build purchase units with proper breakdown
     const purchase_units = [{
       amount: {
         currency_code: 'USD',
-        value: total.toFixed(2)
+        value: total.toFixed(2),
+        breakdown: {
+          item_total: {
+            currency_code: 'USD',
+            value: itemTotal.toFixed(2)
+          },
+          shipping: {
+            currency_code: 'USD',
+            value: shippingCost.toFixed(2)
+          }
+        }
       },
       description: 'Order from Merk Store',
+      items: items.map(item => ({
+        name: item.name,
+        unit_amount: {
+          currency_code: 'USD',
+          value: Number(item.price).toFixed(2)
+        },
+        quantity: item.qty.toString()
+      })),
       shipping: shipping_address ? {
         name: {
-          full_name: shipping_address.firstName
+          full_name: shipping_address.firstName || 'Customer'
         },
         address: {
           address_line_1: shipping_address.address,
           admin_area_2: shipping_address.city,
+          admin_area_1: shipping_address.state || '',
           postal_code: shipping_address.pinCode,
           country_code: shipping_address.country?.value || 'US'
         }
@@ -57,21 +85,36 @@ exports.createOrder = async (req, res) => {
       }
     });
 
+    console.log('🟢 [PayPal Backend] Sending request to PayPal...');
     const order = await client().execute(request);
+
+    console.log('✅ [PayPal Backend] Order created successfully');
+    console.log('✅ [PayPal Backend] Order ID:', order.result.id);
+    console.log('✅ [PayPal Backend] Order Status:', order.result.status);
+    console.log('✅ [PayPal Backend] Links:', order.result.links);
+
+    const approvalUrl = order.result.links?.find(link => link.rel === 'approve')?.href;
+    console.log('🔗 [PayPal Backend] Approval URL:', approvalUrl);
 
     res.json({
       status: true,
       orderId: order.result.id,
       data: order.result,
-      approvalUrl: order.result.links?.find(link => link.rel === 'approve')?.href
+      approvalUrl: approvalUrl
     });
 
   } catch (error) {
-    console.error('PayPal Create Order Error:', error);
+    console.error('❌ [PayPal Backend] Create Order Error:', {
+      message: error.message,
+      statusCode: error.statusCode,
+      details: error.details,
+      stack: error.stack
+    });
     res.status(500).json({
       status: false,
       message: 'Failed to create PayPal order',
-      error: error.message
+      error: error.message,
+      details: error.details || error.message
     });
   }
 };
