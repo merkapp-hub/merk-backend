@@ -28,6 +28,31 @@ exports.createOrder = async (req, res) => {
     console.log('🟢 [PayPal Backend] Total Received:', total.toFixed(2));
     console.log('🟢 [PayPal Backend] Shipping Address:', shipping_address);
 
+    // Validate shipping address required fields
+    if (shipping_address) {
+      if (!shipping_address.pinCode || shipping_address.pinCode.trim() === '') {
+        console.error('❌ [PayPal Backend] Pin Code is required');
+        return res.status(400).json({
+          status: false,
+          message: 'Pin Code is required for payment processing'
+        });
+      }
+      if (!shipping_address.address || shipping_address.address.trim() === '') {
+        console.error('❌ [PayPal Backend] Address is required');
+        return res.status(400).json({
+          status: false,
+          message: 'Address is required for payment processing'
+        });
+      }
+      if (!shipping_address.city || shipping_address.city.trim() === '') {
+        console.error('❌ [PayPal Backend] City is required');
+        return res.status(400).json({
+          status: false,
+          message: 'City is required for payment processing'
+        });
+      }
+    }
+
     // Calculate shipping (difference between total and item total)
     const shippingCost = Number(total) - itemTotal;
     console.log('🟢 [PayPal Backend] Shipping Cost:', shippingCost.toFixed(2));
@@ -62,10 +87,10 @@ exports.createOrder = async (req, res) => {
           full_name: shipping_address.firstName || 'Customer'
         },
         address: {
-          address_line_1: shipping_address.address,
-          admin_area_2: shipping_address.city,
-          admin_area_1: shipping_address.state || '',
-          postal_code: shipping_address.pinCode,
+          address_line_1: shipping_address.address || 'Address not provided',
+          admin_area_2: shipping_address.city || 'City',
+          admin_area_1: shipping_address.state?.value || shipping_address.state || '',
+          postal_code: shipping_address.pinCode || '00000',
           country_code: shipping_address.country?.value || 'US'
         }
       } : undefined
@@ -219,6 +244,201 @@ exports.refundPayment = async (req, res) => {
     res.status(500).json({
       status: false,
       message: 'Failed to process refund',
+      error: error.message
+    });
+  }
+};
+
+// Process Card Payment (In-App)
+exports.processCardPayment = async (req, res) => {
+  try {
+    console.log('🟢 [PayPal Backend] Card Payment Request Received');
+    console.log('🟢 [PayPal Backend] Request Body:', JSON.stringify(req.body, null, 2));
+    
+    const { card, shipping_address, productDetail, total, subtotal, shipping, tax } = req.body;
+    const ProductRequest = require('@models/ProductRequest');
+
+    // Validate required fields
+    if (!productDetail || productDetail.length === 0) {
+      console.error('❌ [PayPal Backend] No products in order');
+      return res.status(400).json({
+        status: false,
+        message: 'Product details are required'
+      });
+    }
+
+    if (!card || !card.number || !card.expiry || !card.cvv) {
+      console.error('❌ [PayPal Backend] Card details missing');
+      return res.status(400).json({
+        status: false,
+        message: 'Card details are required'
+      });
+    }
+
+    if (!total || isNaN(total) || total <= 0) {
+      console.error('❌ [PayPal Backend] Invalid total amount:', total);
+      return res.status(400).json({
+        status: false,
+        message: 'Invalid total amount'
+      });
+    }
+
+    // Validate card details
+    const cardNumber = card.number.replace(/\s/g, '');
+    if (cardNumber.length < 13 || cardNumber.length > 19) {
+      return res.status(400).json({
+        status: false,
+        message: 'Invalid card number'
+      });
+    }
+
+    // Parse expiry date
+    const [expMonth, expYear] = card.expiry.split('/');
+    if (!expMonth || !expYear) {
+      return res.status(400).json({
+        status: false,
+        message: 'Invalid expiry date format. Use MM/YY'
+      });
+    }
+
+    console.log('🟢 [PayPal Backend] Creating order with card payment...');
+
+    // Generate unique PayPal-Request-Id
+    const requestId = `CARD-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    console.log('🟢 [PayPal Backend] Request ID:', requestId);
+
+    // Create PayPal order with card payment source
+    const request = new checkoutNodeJssdk.orders.OrdersCreateRequest();
+    request.prefer("return=representation");
+    
+    // Add PayPal-Request-Id header
+    request.headers['PayPal-Request-Id'] = requestId;
+    
+    // Calculate item total
+    const itemTotal = productDetail.reduce((sum, item) => {
+      return sum + (Number(item.price) * Number(item.qty || item.quantity || 1));
+    }, 0);
+
+    const shippingCost = Number(shipping) || 0;
+    const taxAmount = Number(tax) || 0;
+    
+    // Recalculate total to match breakdown
+    const calculatedTotal = itemTotal + shippingCost + taxAmount;
+    
+    console.log('🟢 [PayPal Backend] Amount Breakdown:', {
+      itemTotal: itemTotal.toFixed(2),
+      shipping: shippingCost.toFixed(2),
+      tax: taxAmount.toFixed(2),
+      calculatedTotal: calculatedTotal.toFixed(2),
+      receivedTotal: Number(total).toFixed(2)
+    });
+
+    request.requestBody({
+      intent: 'CAPTURE',
+      payment_source: {
+        card: {
+          number: cardNumber,
+          expiry: `20${expYear}-${expMonth.padStart(2, '0')}`,
+          security_code: card.cvv,
+          name: card.name,
+          billing_address: {
+            address_line_1: shipping_address.address,
+            admin_area_2: shipping_address.city,
+            postal_code: shipping_address.pinCode,
+            country_code: 'US'
+          }
+        }
+      },
+      purchase_units: [{
+        amount: {
+          currency_code: 'USD',
+          value: calculatedTotal.toFixed(2), // Use calculated total
+          breakdown: {
+            item_total: {
+              currency_code: 'USD',
+              value: itemTotal.toFixed(2)
+            },
+            shipping: {
+              currency_code: 'USD',
+              value: shippingCost.toFixed(2)
+            },
+            tax_total: {
+              currency_code: 'USD',
+              value: taxAmount.toFixed(2)
+            }
+          }
+        },
+        description: 'Order from Merk Store',
+        items: productDetail.map(item => ({
+          name: item.product?.name || item.name || 'Product',
+          unit_amount: {
+            currency_code: 'USD',
+            value: Number(item.price).toFixed(2)
+          },
+          quantity: String(item.qty || item.quantity || 1)
+        })),
+        shipping: {
+          name: {
+            full_name: `${shipping_address.firstName} ${shipping_address.lastName}`.trim()
+          },
+          address: {
+            address_line_1: shipping_address.address,
+            admin_area_2: shipping_address.city,
+            postal_code: shipping_address.pinCode,
+            country_code: 'US'
+          }
+        }
+      }]
+    });
+
+    console.log('🟢 [PayPal Backend] Executing card payment...');
+    const order = await client().execute(request);
+
+    console.log('🟢 [PayPal Backend] Card payment successful:', order.result.id);
+
+    // Save order to database
+    const newOrder = new ProductRequest({
+      user: req.user.id,
+      productDetail: productDetail,
+      shipping_address: shipping_address,
+      total: total,
+      tax: taxAmount,
+      deliveryCharge: shippingCost,
+      paymentmode: 'card',
+      status: 'Pending',
+      orderId: `ORD-${Date.now()}`,
+      paypalOrderId: order.result.id,
+      paypalStatus: order.result.status
+    });
+
+    await newOrder.save();
+
+    res.json({
+      status: true,
+      message: 'Payment processed successfully',
+      orderId: newOrder._id,
+      paypalOrderId: order.result.id,
+      data: order.result
+    });
+
+  } catch (error) {
+    console.error('❌ [PayPal Backend] Card Payment Error:', error);
+    
+    let errorMessage = 'Failed to process card payment';
+    
+    if (error.message.includes('INVALID_CARD_NUMBER')) {
+      errorMessage = 'Invalid card number';
+    } else if (error.message.includes('CARD_EXPIRED')) {
+      errorMessage = 'Card has expired';
+    } else if (error.message.includes('INSUFFICIENT_FUNDS')) {
+      errorMessage = 'Insufficient funds';
+    } else if (error.message.includes('CARD_DECLINED')) {
+      errorMessage = 'Card was declined';
+    }
+
+    res.status(500).json({
+      status: false,
+      message: errorMessage,
       error: error.message
     });
   }

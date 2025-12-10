@@ -48,7 +48,8 @@
     "nodemailer": "^7.0.3",
     "passport": "^0.7.0",
     "passport-jwt": "^4.0.1",
-    "passport-local": "^1.0.0"
+    "passport-local": "^1.0.0",
+    "pdfkit": "^0.17.2"
   },
   "_moduleAliases": {
     "@config": "src/config",

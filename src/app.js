@@ -31,6 +31,11 @@ app.use(helmet());
 app.use(morgan("dev"));
 app.use(passport.initialize());
 
+// Serve static files (for uploads only - invoices are sent directly)
+const path = require('path');
+app.use('/uploads', express.static(path.join(__dirname, '../public/uploads')));
+app.use(express.static(path.join(__dirname, '../public')));
+
 // Routes
 const routes = require('./routes');
 routes(app);

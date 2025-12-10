@@ -18,4 +18,7 @@ router.get('/paypal/order/:orderID', authenticate, paypalController.getOrderDeta
 
 router.post('/paypal/refund', authenticate, paypalController.refundPayment);
 
+// Card Payment (In-App)
+router.post('/paypal/process-card-payment', authenticate, paypalController.processCardPayment);
+
 module.exports = router;

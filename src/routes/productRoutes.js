@@ -56,6 +56,7 @@ router.post("/acceptorderdriver/:id", authMiddleware(["user", "admin", "seller",
 router.get("/orderhistoryfordriver", authMiddleware(["user", "admin", "seller", "driver"]), product.orderhistoryfordriver);
 router.get("/orderhistoryforvendor", authMiddleware(["user", "admin", "seller", "driver"]), product.orderhistoryforvendor);
 router.get("/getProductRequestbyUser", authMiddleware(["user", "admin", "seller", "employee"]), product.getrequestProductbyuser);
+router.get("/generateInvoice/:orderId", authMiddleware(["user", "admin", "seller", "employee"]), product.generateInvoice);
 router.get("/getAlluploadproduct", product.uploadProducts);
 router.post("/suspend/:id", authMiddleware(["user", "admin", "seller"]), product.suspendProduct);
 router.post("/updateProductStatus", authMiddleware(["admin", "seller"]), product.updateProductStatus);

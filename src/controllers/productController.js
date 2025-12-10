@@ -12,6 +12,7 @@ const Review = require("@models/Review");
 const Favourite = require("@models/Favorite");
 const Category = require("@models/Category");
 const { getReview } = require("../../src/helper/user");
+const fs = require("fs");
 
 const cache = new Map();
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
@@ -979,7 +980,8 @@ updateProduct: async (req, res) => {
         }
 
       
-        if (payload.paymentmode === "pay" || payload.paymentmode === "cod") {
+        // Apply commission for all payment modes (pay, cod, paypal)
+        if (payload.paymentmode === "pay" || payload.paymentmode === "cod" || payload.paymentmode === "paypal") {
           const orderTotal = Number(sellerOrders[sellerId].total);
           
           // Get seller's commission rate from database
@@ -1000,6 +1002,7 @@ updateProduct: async (req, res) => {
           console.log(`💰 [Order Creation] Order Total: ${orderTotal}`);
           console.log(`💰 [Order Creation] Admin Fee: ${adminFee}`);
           console.log(`💰 [Order Creation] Seller Earnings: ${sellerEarnings}`);
+          console.log(`💰 [Order Creation] Payment Mode: ${payload.paymentmode}`);
 
          
           await User.findByIdAndUpdate(
@@ -1025,9 +1028,12 @@ updateProduct: async (req, res) => {
               $set: {
                 adminFee: adminFee,
                 sellerEarnings: sellerEarnings,
+                commissionRate: commissionRate
               },
             }
           );
+        } else {
+          console.log(`💰 [Order Creation] Commission not applied - payment mode: ${payload.paymentmode}`);
         }
       }
 
@@ -1252,7 +1258,8 @@ createProductRequest: async (req, res) => {
                 console.log(`💰 Payment mode: ${payload.paymentmode}`);
                 console.log(`💰 Order total: ${sellerOrders[sellerId].total}`);
                 
-                if (payload.paymentmode === "pay" || payload.paymentmode === "cod") {
+                // Apply commission for all payment modes (pay, cod, paypal, card)
+                if (payload.paymentmode === "pay" || payload.paymentmode === "cod" || payload.paymentmode === "paypal") {
                     const orderTotal = Number(sellerOrders[sellerId].total);
                     
                     // Get seller's commission rate from database
@@ -1275,7 +1282,7 @@ createProductRequest: async (req, res) => {
                     console.log(`💰 Calculated admin fee: ${adminFee}`);
                     console.log(`💰 Calculated seller earnings: ${sellerEarnings}`);
                     
-                    // Update seller's wallet with the remaining amount (98%)
+                    // Update seller's wallet with the remaining amount
                     const sellerUpdate = await User.findByIdAndUpdate(
                         sellerId,
                         { $inc: { wallet: sellerEarnings } },
@@ -1300,7 +1307,8 @@ createProductRequest: async (req, res) => {
                         { 
                             $set: { 
                                 adminFee: adminFee,
-                                sellerEarnings: sellerEarnings
+                                sellerEarnings: sellerEarnings,
+                                commissionRate: commissionRate
                             } 
                         }
                     );
@@ -2519,6 +2527,209 @@ getSellerProductByAdmin: async (req, res) => {
       return response.error(res, error);
     }
   },
+
+  generateInvoice: async (req, res) => {
+    try {
+      const { orderId } = req.params;
+      console.log('Generating invoice for order:', orderId);
+      
+      const PDFDocument = require('pdfkit');
+      const path = require('path');
+
+      // Fetch order details
+      const order = await ProductRequest.findById(orderId)
+        .populate('productDetail.product')
+        .populate('user');
+
+      console.log('Order found:', order ? 'Yes' : 'No');
+
+      if (!order) {
+        console.log('Order not found for ID:', orderId);
+        return res.status(404).json({ 
+          success: false, 
+          message: 'Order not found' 
+        });
+      }
+
+      // Set response headers for PDF download
+      const invoiceFileName = `invoice_${orderId}_${Date.now()}.pdf`;
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="${invoiceFileName}"`);
+
+      // Create PDF document and pipe directly to response
+      const doc = new PDFDocument({ margin: 50, size: 'A4' });
+      doc.pipe(res);
+
+      // Add logo
+      const logoPath = path.join(__dirname, '../../public/logo.png');
+      if (fs.existsSync(logoPath)) {
+        doc.image(logoPath, 50, 45, { width: 80 });
+      }
+
+      // Company details
+      doc.fontSize(20)
+        .fillColor('#12344D')
+        .text('INVOICE', 400, 50, { align: 'right' });
+
+      doc.fontSize(10)
+        .fillColor('#6b7280')
+        .text('Merk Store', 400, 80, { align: 'right' })
+        .text('Your trusted marketplace', 400, 95, { align: 'right' })
+        .text('merkapp25@gmail.com.com', 400, 110, { align: 'right' });
+
+      // Invoice details
+      doc.fontSize(10)
+        .fillColor('#111827')
+        .text(`Invoice #: ${order.orderId || order._id}`, 50, 150)
+        .text(`Date: ${new Date(order.createdAt).toLocaleDateString()}`, 50, 165)
+        .text(`Status: ${order.status || 'Pending'}`, 50, 180);
+
+      // Customer details
+      doc.fontSize(12)
+        .fillColor('#12344D')
+        .text('Bill To:', 50, 220);
+
+      // Get customer name from multiple possible sources
+      const customerName = order.address?.name || 
+                          order.address?.fullName || 
+                          order.user?.name || 
+                          order.user?.firstName + ' ' + order.user?.lastName ||
+                          order.userName ||
+                          'Customer';
+      
+      const customerAddress = order.address?.street || 
+                             order.address?.address || 
+                             order.address?.addressLine1 || 
+                             '';
+      
+      const cityStateZip = [
+        order.address?.city || '',
+        order.address?.state || '',
+        order.address?.zipCode || order.address?.postalCode || ''
+      ].filter(Boolean).join(', ');
+      
+      const phone = order.address?.phone || 
+                   order.address?.phoneNumber || 
+                   order.user?.phone || 
+                   '';
+
+      console.log('Customer details:', { customerName, customerAddress, cityStateZip, phone });
+
+      doc.fontSize(10)
+        .fillColor('#111827')
+        .text(customerName, 50, 240);
+      
+      if (customerAddress) {
+        doc.text(customerAddress, 50, 255);
+      }
+      
+      if (cityStateZip) {
+        doc.text(cityStateZip, 50, customerAddress ? 270 : 255);
+      }
+      
+      if (phone) {
+        doc.text(phone, 50, customerAddress && cityStateZip ? 285 : (cityStateZip ? 270 : 255));
+      }
+
+      // Table header
+      const tableTop = 330;
+      doc.fontSize(10)
+        .fillColor('#ffffff')
+        .rect(50, tableTop, 515, 25)
+        .fill('#12344D');
+
+      doc.fillColor('#ffffff')
+        .text('Product', 60, tableTop + 8)
+        .text('Qty', 320, tableTop + 8)
+        .text('Price', 380, tableTop + 8)
+        .text('Total', 480, tableTop + 8);
+
+      // Table rows
+      let yPosition = tableTop + 35;
+      let subtotal = 0;
+
+      order.productDetail.forEach((item, index) => {
+        const productName = item.product?.name || item.name || 'Product';
+        const qty = item.qty || item.quantity || 1;
+        const price = item.price || 0;
+        const total = qty * price;
+        subtotal += total;
+
+        // Alternate row colors
+        if (index % 2 === 0) {
+          doc.rect(50, yPosition - 5, 515, 25).fill('#f9fafb');
+        }
+
+        doc.fillColor('#111827')
+          .fontSize(9)
+          .text(productName, 60, yPosition, { width: 240, ellipsis: true })
+          .text(qty.toString(), 320, yPosition)
+          .text(`$${price.toFixed(2)}`, 380, yPosition)
+          .text(`$${total.toFixed(2)}`, 480, yPosition);
+
+        yPosition += 30;
+      });
+
+      // Summary section
+      yPosition += 20;
+      const summaryX = 380;
+
+      doc.fontSize(10)
+        .fillColor('#6b7280')
+        .text('Subtotal:', summaryX, yPosition)
+        .fillColor('#111827')
+        .text(`$${subtotal.toFixed(2)}`, 480, yPosition);
+
+      if (order.tax && order.tax > 0) {
+        yPosition += 20;
+        doc.fillColor('#6b7280')
+          .text('Tax:', summaryX, yPosition)
+          .fillColor('#111827')
+          .text(`$${order.tax.toFixed(2)}`, 480, yPosition);
+      }
+
+      if (order.deliveryCharge && order.deliveryCharge > 0) {
+        yPosition += 20;
+        doc.fillColor('#6b7280')
+          .text('Delivery:', summaryX, yPosition)
+          .fillColor('#111827')
+          .text(`$${order.deliveryCharge.toFixed(2)}`, 480, yPosition);
+      }
+
+      // Total
+      yPosition += 25;
+      doc.rect(50, yPosition - 5, 515, 30)
+        .fill('#12344D');
+
+      doc.fontSize(12)
+        .fillColor('#ffffff')
+        .text('Total Amount:', summaryX, yPosition + 5)
+        .fontSize(14)
+        .text(`$${(order.total || 0).toFixed(2)}`, 480, yPosition + 5);
+
+      // Footer
+      doc.fontSize(9)
+        .fillColor('#6b7280')
+        .text('Thank you for your business!', 50, 750, { align: 'center' })
+        .text('For any queries, contact us at merkapp25@gmail.com', 50, 765, { align: 'center' });
+
+      // Finalize PDF - this will send the PDF directly to client
+      doc.end();
+      
+      console.log('PDF generated and sent directly to client');
+
+    } catch (error) {
+      console.error('Error generating invoice:', error);
+      if (!res.headersSent) {
+        return res.status(500).json({
+          success: false,
+          message: 'Failed to generate invoice',
+          error: error.message
+        });
+      }
+    }
+  },
+
   uploadProducts: async (req, res) => {
     try {
       const products = req.body;
