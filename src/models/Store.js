@@ -15,6 +15,7 @@ const storeschema = new mongoose.Schema({
     },
     companyName: {
         type: String,
+        required: [true, 'Company name is required'],
     },
     address: {
         type: String,
@@ -36,6 +37,10 @@ const storeschema = new mongoose.Schema({
     },
     email: {
         type: String,
+    },
+    logo: {
+        type: String,
+        default: null
     },
     verification: {
         type: String,

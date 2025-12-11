@@ -8,7 +8,8 @@ exports.createOrder = async (req, res) => {
     console.log('🟢 [PayPal Backend] Create Order Request Received');
     console.log('🟢 [PayPal Backend] Request Body:', JSON.stringify(req.body, null, 2));
     
-    const { items, total, shipping_address } = req.body;
+    const { items, shipping_address } = req.body;
+    let total = Number(req.body.total);
 
     if (!items || items.length === 0) {
       console.error('❌ [PayPal Backend] No items in cart');
@@ -54,8 +55,22 @@ exports.createOrder = async (req, res) => {
     }
 
     // Calculate shipping (difference between total and item total)
-    const shippingCost = Number(total) - itemTotal;
-    console.log('🟢 [PayPal Backend] Shipping Cost:', shippingCost.toFixed(2));
+    let shippingCost = Number(total) - itemTotal;
+    
+    // Ensure shipping cost is not negative
+    if (shippingCost < 0) {
+      console.log('⚠️ [PayPal Backend] Negative shipping detected, adjusting...');
+      console.log('   Item Total:', itemTotal.toFixed(2));
+      console.log('   Total:', total.toFixed(2));
+      console.log('   Difference:', shippingCost.toFixed(2));
+      
+      // Adjust: Set shipping to 0 and recalculate total
+      shippingCost = 0;
+      total = itemTotal;
+    }
+    
+    console.log('🟢 [PayPal Backend] Final Shipping Cost:', shippingCost.toFixed(2));
+    console.log('🟢 [PayPal Backend] Final Total:', total.toFixed(2));
 
     // Build purchase units with proper breakdown
     const purchase_units = [{

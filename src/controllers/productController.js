@@ -308,10 +308,9 @@ createProduct: async (req, res) => {
 
   getProductByslug: async (req, res) => {
     try {
-      let product = await Product.findOne({ slug: req?.params?.id }).populate(
-        "category",
-        "name slug"
-      );
+      let product = await Product.findOne({ slug: req?.params?.id })
+        .populate("category", "name slug")
+        .populate("userid", "firstName lastName email companyName logo");
       
       // Check if product exists before accessing its properties
       if (!product) {
@@ -334,6 +333,7 @@ createProduct: async (req, res) => {
       }
       let d = {
         ...product._doc,
+        seller: product.userid, // Add seller info
         rating: await getReview(product._id),
         reviews,
         favourite: favourite ? true : false,
@@ -346,22 +346,32 @@ createProduct: async (req, res) => {
 
   getProductById: async (req, res) => {
     try {
-      let product = await Product.findById(req?.params?.id).populate(
-        "category",
-        "name"
-      );
-      // let reviews = await Review.find({ product: product._id }).populate('posted_by', 'username')
-      // let favourite
-      // if (req.query.user) {
-      //     favourite = await Favourite.findOne({ product: product._id, user: req.query.user })
-      // }
-      // let d = {
-      //     ...product._doc,
-      //     rating: await getReview(product._id),
-      //     reviews,
-      //     favourite: favourite ? true : false
-      // }
-      return response.success(res, product);
+      let product = await Product.findById(req?.params?.id)
+        .populate("category", "name")
+        .populate("userid", "firstName lastName email companyName logo");
+      
+      if (!product) {
+        return response.error(res, { 
+          message: "Product not found", 
+          status: 404 
+        });
+      }
+      
+      let reviews = await Review.find({ product: product._id }).populate('posted_by', 'username');
+      let favourite;
+      if (req.query.user) {
+        favourite = await Favourite.findOne({ product: product._id, user: req.query.user });
+      }
+      
+      let d = {
+        ...product._doc,
+        seller: product.userid, // Add seller info
+        rating: await getReview(product._id),
+        reviews,
+        favourite: favourite ? true : false
+      };
+      
+      return response.success(res, d);
     } catch (error) {
       return response.error(res, error);
     }
@@ -1204,7 +1214,9 @@ createProductRequest: async (req, res) => {
                 isReturnable,
                 color: item.color,
                 name: item.name,
-                size: item.size
+                size: item.size,
+                selectedSize: item.selectedSize,
+                selectedColor: item.selectedColor
             });
 
           
@@ -2597,18 +2609,20 @@ getSellerProductByAdmin: async (req, res) => {
                           order.userName ||
                           'Customer';
       
-      const customerAddress = order.address?.street || 
+      const customerAddress = order.shipping_address?.address ||
+                             order.address?.street || 
                              order.address?.address || 
                              order.address?.addressLine1 || 
                              '';
       
       const cityStateZip = [
-        order.address?.city || '',
-        order.address?.state || '',
-        order.address?.zipCode || order.address?.postalCode || ''
+        order.shipping_address?.city || order.address?.city || '',
+        order.shipping_address?.state || order.address?.state || '',
+        order.shipping_address?.pinCode || order.address?.zipCode || order.address?.postalCode || ''
       ].filter(Boolean).join(', ');
       
-      const phone = order.address?.phone || 
+      const phone = order.shipping_address?.phoneNumber ||
+                   order.address?.phone || 
                    order.address?.phoneNumber || 
                    order.user?.phone || 
                    '';
@@ -2662,7 +2676,17 @@ getSellerProductByAdmin: async (req, res) => {
 
         doc.fillColor('#111827')
           .fontSize(9)
-          .text(productName, 60, yPosition, { width: 240, ellipsis: true })
+          .text(productName, 60, yPosition, { width: 240, ellipsis: true });
+        
+        if (item.selectedSize || item.selectedColor) {
+          let variant = '';
+          if (item.selectedSize) variant += `Size: ${item.selectedSize}`;
+          if (item.selectedColor) variant += (variant ? ', ' : '') + `Color: ${item.selectedColor.color || item.selectedColor}`;
+          doc.fillColor('#6b7280').fontSize(7).text(`(${variant})`, 60, yPosition + 10);
+          yPosition += 10;
+        }
+        
+        doc.fillColor('#111827').fontSize(9)
           .text(qty.toString(), 320, yPosition)
           .text(`$${price.toFixed(2)}`, 380, yPosition)
           .text(`$${total.toFixed(2)}`, 480, yPosition);
