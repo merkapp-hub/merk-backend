@@ -879,7 +879,12 @@ updateProduct: async (req, res) => {
             paymentmode: payload.paymentmode,
             timeslot: payload.timeslot,
             deliveryCharge: payload.deliveryCharge,
-            deliveryTip: payload.deliveryTip
+            deliveryTip: payload.deliveryTip,
+            // Add currency information for PDF generation
+            userCurrency: payload.userCurrency || 'USD',
+            currencySymbol: payload.currencySymbol || '$',
+            exchangeRate: payload.exchangeRate || 1,
+            displayTotal: payload.displayTotal || 0
           };
         }
 
@@ -1099,6 +1104,12 @@ createProductRequest: async (req, res) => {
     console.log("🚀 createProductRequest Backend API called");
     console.log("📦 Request body:", req.body);
     console.log("👤 User:", req.user);
+    console.log("💰 Currency Info Received:", {
+        userCurrency: req.body.userCurrency,
+        currencySymbol: req.body.currencySymbol,
+        exchangeRate: req.body.exchangeRate,
+        displayTotal: req.body.displayTotal
+    });
     
     try {
        
@@ -1184,7 +1195,12 @@ createProductRequest: async (req, res) => {
         paymentmode: payload.paymentmode,
         timeslot: payload.timeslot,
         deliveryCharge: payload.deliveryCharge || 0,
-        deliveryTip: payload.deliveryTip || 0
+        deliveryTip: payload.deliveryTip || 0,
+        // Add currency information for PDF generation
+        userCurrency: payload.userCurrency || 'USD',
+        currencySymbol: payload.currencySymbol || '$',
+        exchangeRate: payload.exchangeRate || 1,
+        displayTotal: payload.displayTotal || 0
     };
             }
 
@@ -2548,10 +2564,21 @@ getSellerProductByAdmin: async (req, res) => {
       const PDFDocument = require('pdfkit');
       const path = require('path');
 
-      // Fetch order details
-      const order = await ProductRequest.findById(orderId)
-        .populate('productDetail.product')
-        .populate('user');
+      // Fetch order details - support both _id (MongoDB ObjectId) and orderId (custom ID)
+      let order;
+      
+      // Check if orderId looks like MongoDB ObjectId (24 hex characters)
+      if (orderId.match(/^[0-9a-fA-F]{24}$/)) {
+        // It's a MongoDB ObjectId, use findById
+        order = await ProductRequest.findById(orderId)
+          .populate('productDetail.product')
+          .populate('user');
+      } else {
+        // It's a custom orderId (like ORD-MJ2KULPP-80E5), search by orderId field
+        order = await ProductRequest.findOne({ orderId: orderId })
+          .populate('productDetail.product')
+          .populate('user');
+      }
 
       console.log('Order found:', order ? 'Yes' : 'No');
 
@@ -2569,8 +2596,41 @@ getSellerProductByAdmin: async (req, res) => {
       res.setHeader('Content-Disposition', `attachment; filename="${invoiceFileName}"`);
 
       // Create PDF document and pipe directly to response
-      const doc = new PDFDocument({ margin: 50, size: 'A4' });
+      const doc = new PDFDocument({ 
+        margin: 50, 
+        size: 'A4',
+        bufferPages: true
+      });
       doc.pipe(res);
+      
+      // Try to use a font that supports Unicode currency symbols
+      // PDFKit's built-in fonts don't support all Unicode characters
+      try {
+        // Try multiple font options
+        const fontOptions = [
+          path.join(__dirname, '../../fonts/NotoSans-Regular.ttf'),
+          path.join(__dirname, '../../fonts/Roboto-Regular.ttf'),
+          path.join(__dirname, '../../fonts/Arial.ttf')
+        ];
+        
+        let fontLoaded = false;
+        for (const fontPath of fontOptions) {
+          if (fs.existsSync(fontPath)) {
+            doc.registerFont('UnicodeFont', fontPath);
+            doc.font('UnicodeFont');
+            console.log(`✅ Using Unicode font: ${path.basename(fontPath)}`);
+            fontLoaded = true;
+            break;
+          }
+        }
+        
+        if (!fontLoaded) {
+          console.log('⚠️ No Unicode font found, currency symbols may not display correctly');
+          console.log('💡 Download Noto Sans or Roboto font and place in merk-backend/fonts/');
+        }
+      } catch (fontError) {
+        console.log('⚠️ Could not load Unicode font:', fontError.message);
+      }
 
       // Add logo
       const logoPath = path.join(__dirname, '../../public/logo.png');
@@ -2645,6 +2705,36 @@ getSellerProductByAdmin: async (req, res) => {
         doc.text(phone, 50, customerAddress && cityStateZip ? 285 : (cityStateZip ? 270 : 255));
       }
 
+      // Get currency info from order (with fallback to USD)
+      const currencySymbol = order.currencySymbol || '$';
+      const exchangeRate = order.exchangeRate || 1;
+      const userCurrency = order.userCurrency || 'USD';
+      
+      // Debug log for PDF generation
+      console.log('📄 PDF Generation - Currency Info:', {
+        orderId: order._id,
+        userCurrency: order.userCurrency,
+        currencySymbol: order.currencySymbol,
+        exchangeRate: order.exchangeRate,
+        fallbackUsed: !order.userCurrency,
+        orderTotal: order.total
+      });
+      
+      // Use actual currency symbol directly
+      // If Unicode font is loaded, symbols like ₹, €, £ will render correctly
+      // Otherwise, fallback to currency code
+      const pdfSafeSymbol = currencySymbol || userCurrency || '$';
+      
+      console.log(`🔄 Using currency symbol: "${pdfSafeSymbol}" (${userCurrency})`);
+      
+      // Helper function to convert and format price
+      const formatPrice = (priceInUSD) => {
+        const converted = Math.round(priceInUSD * exchangeRate);
+        const formatted = `${pdfSafeSymbol} ${converted.toLocaleString()}`;
+        console.log(`💱 Converting: $${priceInUSD} → ${formatted} (rate: ${exchangeRate}, symbol: "${currencySymbol}" → "${pdfSafeSymbol}")`);
+        return formatted;
+      };
+
       // Table header
       const tableTop = 330;
       doc.fontSize(10)
@@ -2688,8 +2778,8 @@ getSellerProductByAdmin: async (req, res) => {
         
         doc.fillColor('#111827').fontSize(9)
           .text(qty.toString(), 320, yPosition)
-          .text(`$${price.toFixed(2)}`, 380, yPosition)
-          .text(`$${total.toFixed(2)}`, 480, yPosition);
+          .text(formatPrice(price), 380, yPosition)
+          .text(formatPrice(total), 480, yPosition);
 
         yPosition += 30;
       });
@@ -2702,14 +2792,14 @@ getSellerProductByAdmin: async (req, res) => {
         .fillColor('#6b7280')
         .text('Subtotal:', summaryX, yPosition)
         .fillColor('#111827')
-        .text(`$${subtotal.toFixed(2)}`, 480, yPosition);
+        .text(formatPrice(subtotal), 480, yPosition);
 
       if (order.tax && order.tax > 0) {
         yPosition += 20;
         doc.fillColor('#6b7280')
           .text('Tax:', summaryX, yPosition)
           .fillColor('#111827')
-          .text(`$${order.tax.toFixed(2)}`, 480, yPosition);
+          .text(formatPrice(order.tax), 480, yPosition);
       }
 
       if (order.deliveryCharge && order.deliveryCharge > 0) {
@@ -2717,7 +2807,7 @@ getSellerProductByAdmin: async (req, res) => {
         doc.fillColor('#6b7280')
           .text('Delivery:', summaryX, yPosition)
           .fillColor('#111827')
-          .text(`$${order.deliveryCharge.toFixed(2)}`, 480, yPosition);
+          .text(formatPrice(order.deliveryCharge), 480, yPosition);
       }
 
       // Total
@@ -2729,7 +2819,7 @@ getSellerProductByAdmin: async (req, res) => {
         .fillColor('#ffffff')
         .text('Total Amount:', summaryX, yPosition + 5)
         .fontSize(14)
-        .text(`$${(order.total || 0).toFixed(2)}`, 480, yPosition + 5);
+        .text(formatPrice(order.total || 0), 480, yPosition + 5);
 
       // Footer
       doc.fontSize(9)

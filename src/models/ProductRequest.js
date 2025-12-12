@@ -126,6 +126,22 @@ const productrequestchema = new mongoose.Schema(
     finalAmount: {
       type: Number,
     },
+    // Currency information for PDF generation
+    userCurrency: {
+      type: String,
+      default: 'USD'
+    },
+    currencySymbol: {
+      type: String,
+      default: '$'
+    },
+    exchangeRate: {
+      type: Number,
+      default: 1
+    },
+    displayTotal: {
+      type: Number  // Total in user's currency
+    },
     
     adminFee: {
       type: Number,
