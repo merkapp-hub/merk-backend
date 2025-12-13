@@ -15,7 +15,7 @@ exports.createContent = async (req, res) => {
     if (existingContent) {
       const updateData = { termsAndConditions, privacy, returnPolicy };
       
-      // Only update aboutPage if it's provided in the request
+     
       if (aboutPage) {
         updateData.aboutPage = {
           ...existingContent.aboutPage.toObject(),
