@@ -120,8 +120,8 @@ exports.createOrder = async (req, res) => {
         brand_name: 'Merk Store',
         landing_page: 'NO_PREFERENCE',
         user_action: 'PAY_NOW',
-        return_url: `${process.env.FRONTEND_URL}/payment-success`,
-        cancel_url: `${process.env.FRONTEND_URL}/payment-cancel`
+        return_url: `${process.env.FRONTEND_URL || 'https://api.merkapp.net/api'}/paypal-success`,
+        cancel_url: `${process.env.FRONTEND_URL || 'https://api.merkapp.net/api'}/paypal-cancel`
       }
     });
 

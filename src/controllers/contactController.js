@@ -43,8 +43,8 @@ exports.getAllContacts = async (req, res) => {
     }
 
     // Search by email (case-insensitive)
-    if (req.query.Email) {
-      query.Email = { $regex: req.query.Email, $options: 'i' };
+    if (req.query.email) {
+      query.email = { $regex: req.query.email, $options: 'i' };
     }
 
     // Filter by date

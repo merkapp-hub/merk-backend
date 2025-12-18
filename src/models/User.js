@@ -59,6 +59,25 @@ const userSchema = new mongoose.Schema(
       type: String,
       default: ''
     },
+   
+    shiping_address: {
+      firstName: { type: String },
+      lastName: { type: String },
+      address: { type: String },
+      pinCode: { type: String },
+      phoneNumber: { type: String },
+      city: { type: String },
+      state: { 
+        value: { type: String },
+        label: { type: String }
+      },
+      country: {
+        value: { type: String },
+        label: { type: String }
+      },
+      companyName: { type: String },
+      apartment: { type: String }
+    },
     // type: {
     //   type: String,
     //   enum: ['user', 'admin', 'seller'],
