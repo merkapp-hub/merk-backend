@@ -515,7 +515,7 @@ module.exports = {
   updateProfile : async (req, res) => {
   try {
     const userId = req.user.id;
-    const { firstName, lastName, email } = req.body;
+    const { firstName, lastName, email, shiping_address } = req.body;
 
     const user = await User.findById(userId);
 
@@ -527,6 +527,14 @@ module.exports = {
     if (firstName) user.firstName = firstName;
     if (lastName) user.lastName = lastName;
     if (email) user.email = email;
+    
+    // Update shipping address if provided
+    if (shiping_address) {
+      user.shiping_address = {
+        ...user.shiping_address,
+        ...shiping_address
+      };
+    }
 
     const updatedUser = await user.save();
 
