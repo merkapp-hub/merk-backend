@@ -210,8 +210,21 @@ module.exports = {
           const Store = require('@models/Store'); // Add this import at top
           const storeData = await Store.findOne({ userid: sellerId }).sort({ createdAt: -1 });
 
+          // If user doesn't have phone number but store has it, use store's phone
+          let phoneNumber = user.number || user.mobile;
+          if (!phoneNumber && storeData?.phone) {
+            phoneNumber = storeData.phone;
+            // Optionally update user record with phone from store
+            await User.findByIdAndUpdate(sellerId, {
+              number: storeData.phone,
+              mobile: storeData.phone
+            });
+          }
+
           return {
             ...user,
+            number: phoneNumber, // Ensure phone number is included
+            mobile: phoneNumber, // Backward compatibility
             indexNo: skip + index + 1,
             stats,
             store: storeData || null, // Add store data
@@ -369,6 +382,14 @@ module.exports = {
       console.log(user)
       if (!user)
         return res.status(401).json({ message: 'Invalid email or password' });
+
+      // Check if account is deleted
+      if (user.isDeleted) {
+        return res.status(403).json({ 
+          message: 'Your account has been deleted. Please contact support team for assistance.',
+          isDeleted: true
+        });
+      }
 
       const isMatch = await user.isValidPassword(password);
       if (!isMatch)
@@ -594,20 +615,51 @@ updatePassword : async (req, res) => {
 
 deleteAccount : async (req, res) => {
   try {
-    const userId = req.user._id; 
+    const userId = req.user.id || req.user._id;
+    const { confirmText } = req.body;
     
-   
+    console.log('🗑️ Delete account request received for user:', userId);
+    console.log('🗑️ Confirmation text:', confirmText);
     
+    // Verify confirmation text
+    if (confirmText !== 'DELETE THIS ACCOUNT') {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid confirmation text. Please type "DELETE THIS ACCOUNT" to proceed.'
+      });
+    }
     
-    await User.findByIdAndDelete(userId);
+    // Find user
+    const user = await User.findById(userId);
     
-   
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+    
+    // Check if already deleted
+    if (user.isDeleted) {
+      return res.status(400).json({
+        success: false,
+        message: 'Account is already deleted'
+      });
+    }
+    
+    // Soft delete - mark as deleted but don't remove from database
+    user.isDeleted = true;
+    user.deletedAt = new Date();
+    await user.save();
+    
+    console.log('✅ Account soft deleted successfully:', userId);
+    
     res.status(200).json({
       success: true,
-      message: 'Account deleted successfully'
+      message: 'Your account has been deleted successfully. Please contact support team if you need any assistance.'
     });
   } catch (error) {
-    console.error('Error deleting account:', error);
+    console.error('❌ Error deleting account:', error);
     res.status(500).json({
       success: false,
       message: 'Error deleting account',
