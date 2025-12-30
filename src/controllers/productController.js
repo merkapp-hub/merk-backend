@@ -3182,27 +3182,43 @@ getSellerProductByAdmin: async (req, res) => {
 uploadImages: async (req, res) => {
   try {
     console.log('=== Upload Images Request ===');
-    console.log('Files received:', req.files?.length || 0);
+    console.log('Request method:', req.method);
     console.log('Content-Type:', req.headers['content-type']);
+    console.log('Authorization header present:', !!req.headers['authorization']);
+    console.log('Files received:', req.files?.length || 0);
+    console.log('Body:', req.body);
+    
+    // Log all headers for debugging
+    console.log('All headers:', JSON.stringify(req.headers, null, 2));
     
     if (!req.files || req.files.length === 0) {
       console.log('ERROR: No files in request');
-      console.log('req.body:', req.body);
-      return response.error(res, { message: 'No images uploaded' }, 400);
+      console.log('req.files:', req.files);
+      console.log('req.file:', req.file);
+      
+      // Check if multer encountered an error
+      if (req.fileValidationError) {
+        console.log('Multer validation error:', req.fileValidationError);
+        return response.error(res, { message: req.fileValidationError }, 400);
+      }
+      
+      return response.error(res, { message: 'No images uploaded. Please select images to upload.' }, 400);
     }
     
-    console.log('Processing files...');
+    console.log('Processing', req.files.length, 'files...');
     const imageUrls = req.files.map((file, index) => {
       console.log(`File ${index + 1}:`, {
+        fieldname: file.fieldname,
         originalname: file.originalname,
+        encoding: file.encoding,
         mimetype: file.mimetype,
         size: file.size,
         path: file.path
       });
-      return file.path;
+      return file.path; // Cloudinary URL
     });
     
-    console.log('Upload successful. URLs:', imageUrls);
+    console.log('Upload successful. Cloudinary URLs:', imageUrls);
     
     return response.success(res, { 
       message: 'Images uploaded successfully',
@@ -3210,11 +3226,69 @@ uploadImages: async (req, res) => {
     });
   } catch (error) {
     console.error('=== Upload Error ===');
+    console.error('Error name:', error.name);
     console.error('Error message:', error.message);
     console.error('Error stack:', error.stack);
+    
     return response.error(res, { 
-      message: 'Something went wrong!',
+      message: 'Failed to upload images',
       error: error.message 
+    }, 500);
+  }
+},
+
+uploadImagesBase64: async (req, res) => {
+  try {
+    console.log('=== Upload Images Base64 Request ===');
+    const { images } = req.body;
+    
+    if (!images || images.length === 0) {
+      return response.error(res, { message: 'No images provided' }, 400);
+    }
+    
+    console.log('Processing', images.length, 'base64 images...');
+    
+    const fs = require('fs');
+    const path = require('path');
+    const uploadDir = path.join(__dirname, '../../uploads');
+    
+    // Ensure upload directory exists
+    if (!fs.existsSync(uploadDir)) {
+      fs.mkdirSync(uploadDir, { recursive: true });
+    }
+    
+    const imageUrls = [];
+    
+    for (let i = 0; i < images.length; i++) {
+      const image = images[i];
+      const base64Data = image.data.replace(/^data:image\/\w+;base64,/, '');
+      const buffer = Buffer.from(base64Data, 'base64');
+      
+      const filename = `${Date.now()}_${i}_${image.name}`;
+      const filepath = path.join(uploadDir, filename);
+      
+      fs.writeFileSync(filepath, buffer);
+      
+      // Return relative path
+      const imageUrl = `/uploads/${filename}`;
+      imageUrls.push(imageUrl);
+      
+      console.log(`Image ${i + 1} saved:`, imageUrl);
+    }
+    
+    console.log('All images uploaded successfully');
+    
+    return response.success(res, {
+      message: 'Images uploaded successfully',
+      images: imageUrls
+    });
+    
+  } catch (error) {
+    console.error('=== Upload Base64 Error ===');
+    console.error('Error:', error.message);
+    return response.error(res, {
+      message: 'Failed to upload images',
+      error: error.message
     });
   }
 }

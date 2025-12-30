@@ -410,8 +410,10 @@ module.exports = {
           _id: user._id,
           email: user.email,
           firstName: user.firstName,
+          lastName: user.lastName,
           role: user.role,
-           status: user.status,
+          status: user.status,
+          profilePicture: user.profilePicture,
           token
         },
       });
@@ -571,44 +573,55 @@ module.exports = {
 updatePassword : async (req, res) => {
   try {
     const userId = req.user.id;
-    const { currentPassword, newPassword, confirmNewPassword } = req.body;
+    const { currentPassword, newPassword } = req.body;
 
-    if (!currentPassword || !newPassword || !confirmNewPassword) {
-      return res.status(400).json({ message: "All password fields are required" });
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ 
+        status: false,
+        message: "Current password and new password are required" 
+      });
     }
 
     if (newPassword.length < 6) {
-      return res.status(400).json({ message: "New password must be at least 6 characters" });
-    }
-
-    if (newPassword !== confirmNewPassword) {
-      return res.status(400).json({ message: "New password and confirm password do not match" });
+      return res.status(400).json({ 
+        status: false,
+        message: "New password must be at least 6 characters" 
+      });
     }
 
     const user = await User.findById(userId);
 
     if (!user) {
-      return res.status(404).json({ message: "User not found" });
+      return res.status(404).json({ 
+        status: false,
+        message: "User not found" 
+      });
     }
 
     const isMatch = bcrypt.compareSync(currentPassword, user.password);
 
     if (!isMatch) {
-      return res.status(401).json({ message: "Current password is incorrect" });
+      return res.status(401).json({ 
+        status: false,
+        message: "Current password is incorrect" 
+      });
     }
 
     user.password = bcrypt.hashSync(newPassword, bcrypt.genSaltSync(10));
     await user.save();
 
-    return res.status(200).json({ message: "Password updated successfully" });
+    return res.status(200).json({ 
+      status: true,
+      message: "Password updated successfully" 
+    });
   } catch (error) {
     console.error("Update password error:", error);
-    return response.error(res, error);
+    return res.status(500).json({
+      status: false,
+      message: "Failed to update password",
+      error: error.message
+    });
   }
-
-
-
-
 },
 
 

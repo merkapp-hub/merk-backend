@@ -60,7 +60,149 @@ router.get("/generateInvoice/:orderId", authMiddleware(["user", "admin", "seller
 router.get("/getAlluploadproduct", product.uploadProducts);
 router.post("/suspend/:id", authMiddleware(["user", "admin", "seller"]), product.suspendProduct);
 router.post("/updateProductStatus", authMiddleware(["admin", "seller"]), product.updateProductStatus);
-router.post("/uploadImages", authMiddleware(["user", "admin", "seller"]), upload.array('images', 10), product.uploadImages);
+router.post("/uploadImages", 
+  authMiddleware(["user", "admin", "seller"]), 
+  (req, res, next) => {
+    console.log('=== Upload Images Route Hit ===');
+    console.log('Content-Type:', req.headers['content-type']);
+    console.log('Content-Length:', req.headers['content-length']);
+    console.log('User:', req.user?.email);
+    
+    // Set a timeout to catch hanging requests
+    req.setTimeout(60000, () => {
+      console.error('Request timeout after 60 seconds');
+      if (!res.headersSent) {
+        res.status(408).json({
+          status: false,
+          message: 'Request timeout - upload took too long'
+        });
+      }
+    });
+    
+    next();
+  },
+  (req, res, next) => {
+    console.log('=== Before Multer Middleware ===');
+    next();
+  },
+  upload.array('images', 10), 
+  (req, res, next) => {
+    console.log('=== After Multer Middleware ===');
+    console.log('Files parsed:', req.files?.length || 0);
+    next();
+  },
+  (err, req, res, next) => {
+    // Multer error handler
+    console.error('=== Multer Error Handler ===');
+    if (err) {
+      console.error('Error name:', err.name);
+      console.error('Error message:', err.message);
+      console.error('Error code:', err.code);
+      console.error('Error stack:', err.stack);
+      
+      if (err.code === 'LIMIT_FILE_SIZE') {
+        return res.status(400).json({
+          status: false,
+          message: 'File too large. Maximum size is 10MB per file.'
+        });
+      }
+      
+      if (err.code === 'LIMIT_FILE_COUNT') {
+        return res.status(400).json({
+          status: false,
+          message: 'Too many files. Maximum is 10 files.'
+        });
+      }
+      
+      return res.status(400).json({
+        status: false,
+        message: err.message || 'File upload error',
+        error: err.toString()
+      });
+    }
+    next();
+  },
+  product.uploadImages
+);
+
+// Test endpoint without multer - just to see if request reaches
+router.post("/testUploadSimple", 
+  authMiddleware(["user", "admin", "seller"]),
+  (req, res) => {
+    console.log('=== Simple Test Upload Endpoint ===');
+    console.log('Request received successfully!');
+    console.log('Content-Type:', req.headers['content-type']);
+    console.log('Content-Length:', req.headers['content-length']);
+    console.log('Body keys:', Object.keys(req.body));
+    
+    return res.status(200).json({
+      status: true,
+      message: 'Simple test endpoint reached successfully',
+      contentType: req.headers['content-type'],
+      contentLength: req.headers['content-length']
+    });
+  }
+);
+
+// Alternative upload using raw body parser
+const multer = require('multer');
+const uploadMemory = multer({ storage: multer.memoryStorage() });
+
+router.post("/uploadImagesAlt",
+  authMiddleware(["user", "admin", "seller"]),
+  uploadMemory.array('images', 10),
+  async (req, res) => {
+    try {
+      console.log('=== Alternative Upload Endpoint ===');
+      console.log('Files received:', req.files?.length || 0);
+      
+      if (!req.files || req.files.length === 0) {
+        return res.status(400).json({
+          status: false,
+          message: 'No files received'
+        });
+      }
+      
+      // Upload to Cloudinary manually
+      const { cloudinary } = require('@services/fileUpload');
+      const uploadPromises = req.files.map(file => {
+        return new Promise((resolve, reject) => {
+          const uploadStream = cloudinary.uploader.upload_stream(
+            {
+              folder: 'merk_uploads',
+              resource_type: 'image'
+            },
+            (error, result) => {
+              if (error) reject(error);
+              else resolve(result.secure_url);
+            }
+          );
+          uploadStream.end(file.buffer);
+        });
+      });
+      
+      const imageUrls = await Promise.all(uploadPromises);
+      
+      console.log('Upload successful:', imageUrls);
+      
+      return res.status(200).json({
+        status: true,
+        data: {
+          message: 'Images uploaded successfully',
+          images: imageUrls
+        }
+      });
+      
+    } catch (error) {
+      console.error('Upload error:', error);
+      return res.status(500).json({
+        status: false,
+        message: error.message
+      });
+    }
+  }
+);
+router.post("/uploadImagesBase64", authMiddleware(["user", "admin", "seller"]), product.uploadImagesBase64);
 router.get("/getdriveramount", product.getdriveramount);
 router.get("/getdriverpendingamount/:id", product.getdriverpendingamount);
 router.get("/collectcash/:id", authMiddleware(["user", "admin", "seller", "driver"]), product.collectcash);
