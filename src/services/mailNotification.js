@@ -367,4 +367,60 @@ module.exports = {
       throw new Error("Could not send notification mail");
     }
   },
+
+  // Import order email templates
+  orderReceivedMail: async ({ email, name, orderId, orderTotal, orderDate, currencySymbol }) => {
+    const { orderReceivedTemplate } = require('./orderEmailTemplates');
+    try {
+      const html = orderReceivedTemplate({ name, orderId, orderTotal, orderDate, currencySymbol });
+      return await sendMail(email, `Order Received - ${orderId}`, html);
+    } catch (err) {
+      console.error("Order received mail error:", err);
+      throw new Error("Could not send order received mail");
+    }
+  },
+
+  orderPreparingMail: async ({ email, name, orderId, estimatedTime }) => {
+    const { orderPreparingTemplate } = require('./orderEmailTemplates');
+    try {
+      const html = orderPreparingTemplate({ name, orderId, estimatedTime });
+      return await sendMail(email, `Order Preparing - ${orderId}`, html);
+    } catch (err) {
+      console.error("Order preparing mail error:", err);
+      throw new Error("Could not send order preparing mail");
+    }
+  },
+
+  orderShippedMail: async ({ email, name, orderId, trackingNumber, estimatedDelivery }) => {
+    const { orderShippedTemplate } = require('./orderEmailTemplates');
+    try {
+      const html = orderShippedTemplate({ name, orderId, trackingNumber, estimatedDelivery });
+      return await sendMail(email, `Order Shipped - ${orderId}`, html);
+    } catch (err) {
+      console.error("Order shipped mail error:", err);
+      throw new Error("Could not send order shipped mail");
+    }
+  },
+
+  outForDeliveryMail: async ({ email, name, orderId, deliveryTime }) => {
+    const { outForDeliveryTemplate } = require('./orderEmailTemplates');
+    try {
+      const html = outForDeliveryTemplate({ name, orderId, deliveryTime });
+      return await sendMail(email, `Out for Delivery - ${orderId}`, html);
+    } catch (err) {
+      console.error("Out for delivery mail error:", err);
+      throw new Error("Could not send out for delivery mail");
+    }
+  },
+
+  orderDeliveredMail: async ({ email, name, orderId, deliveryDate, proofImage }) => {
+    const { orderDeliveredTemplate } = require('./orderEmailTemplates');
+    try {
+      const html = orderDeliveredTemplate({ name, orderId, deliveryDate, proofImage });
+      return await sendMail(email, `Order Delivered - ${orderId}`, html);
+    } catch (err) {
+      console.error("Order delivered mail error:", err);
+      throw new Error("Could not send order delivered mail");
+    }
+  },
 };

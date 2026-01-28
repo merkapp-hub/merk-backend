@@ -1269,6 +1269,31 @@ createProductRequest: async (req, res) => {
                 const savedOrder = await newOrder.save();
                 console.log("✅ Order saved successfully with ID:", savedOrder._id);
                
+                // Send order received email immediately
+                try {
+                    const { orderReceivedMail } = require('../services/mailNotification');
+                    const customer = await User.findById(req.user.id);
+                    
+                    if (customer && customer.email) {
+                        await orderReceivedMail({
+                            email: customer.email,
+                            name: customer.firstName || 'Customer',
+                            orderId: savedOrder.orderId || savedOrder._id,
+                            orderTotal: savedOrder.total.toFixed(2),
+                            orderDate: new Date(savedOrder.createdAt).toLocaleDateString('en-US', { 
+                                month: 'short', 
+                                day: 'numeric', 
+                                year: 'numeric' 
+                            }),
+                            currencySymbol: payload.currencySymbol || '$'
+                        });
+                        console.log("📧 Order received email sent to:", customer.email);
+                    }
+                } catch (emailError) {
+                    console.error("⚠️ Error sending order received email:", emailError);
+                    // Don't fail the order if email fails
+                }
+                
                 
                 savedOrders.push(savedOrder);
                 
@@ -2225,47 +2250,95 @@ getSellerProductByAdmin: async (req, res) => {
 
   changeorderstatus: async (req, res) => {
     try {
-      const product = await ProductRequest.findById(req.body.id);
+      const product = await ProductRequest.findById(req.body.id).populate('user', 'email firstName');
+      
+      if (!product) {
+        return response.error(res, { message: "Order not found" });
+      }
+      
+      const oldStatus = product.status;
       product.status = req.body.status;
-      if (req.body.status === "Driverassigned") {
-        let driverlist = await User.find({
-          type: "Driver",
-          location: {
-            $near: {
-              $maxDistance: 1609.34 * 10,
-              $geometry: product.location,
-            },
-          },
-        });
-        {
-          driverlist.length > 0 &&
-            (await notify(
-              driverlist,
-              "New Order receive",
-              "You New Order receive for delivery"
-            ));
+      
+      // Import email functions
+      const { 
+        orderPreparingMail, 
+        orderShippedMail, 
+        outForDeliveryMail, 
+        orderDeliveredMail 
+      } = require('../services/mailNotification');
+      
+      // Send emails based on status change
+      if (product.user && product.user.email) {
+        const customerName = product.user.firstName || 'Customer';
+        const orderId = product.orderId || product._id;
+        
+        try {
+          switch (req.body.status) {
+            case "Preparing":
+              await orderPreparingMail({
+                email: product.user.email,
+                name: customerName,
+                orderId: orderId,
+                estimatedTime: '1-2 business days'
+              });
+              console.log("📧 Order preparing email sent");
+              break;
+              
+            case "Shipped":
+              await orderShippedMail({
+                email: product.user.email,
+                name: customerName,
+                orderId: orderId,
+                trackingNumber: req.body.trackingNumber || 'N/A',
+                estimatedDelivery: '2-3 business days'
+              });
+              console.log("📧 Order shipped email sent");
+              break;
+              
+            case "OutForDelivery":
+              await outForDeliveryMail({
+                email: product.user.email,
+                name: customerName,
+                orderId: orderId,
+                deliveryTime: 'today'
+              });
+              console.log("📧 Out for delivery email sent");
+              break;
+              
+            case "Delivered":
+              product.onthewaytodelivery = false;
+              product.deliveredAt = new Date();
+              
+              await orderDeliveredMail({
+                email: product.user.email,
+                name: customerName,
+                orderId: orderId,
+                deliveryDate: new Date().toLocaleDateString('en-US', { 
+                  month: 'short', 
+                  day: 'numeric', 
+                  year: 'numeric' 
+                }),
+                proofImage: req.body.proofImage || null
+              });
+              console.log("📧 Order delivered email sent");
+              
+              await notify(
+                product.user._id,
+                "Order delivered",
+                "Your order has been delivered successfully"
+              );
+              break;
+          }
+        } catch (emailError) {
+          console.error("⚠️ Error sending status update email:", emailError);
+          // Don't fail the status update if email fails
         }
       }
-      if (req.body.status === "Delivered") {
-        product.onthewaytodelivery = false;
-        product.deliveredAt = new Date();
-        await notify(
-          product.user,
-          "Order delivered",
-          "You order delivered successfully"
-        );
-      }
-      if (req.body.status === "Collected") {
-        await notify(
-          product.user,
-          "Order collected",
-          "Order collected by driver"
-        );
-      }
-
-      product.save();
+      
+      await product.save();
       return response.success(res, product);
     } catch (error) {
+      console.error("Error in changeorderstatus:", error);
       return response.error(res, error);
     }
   },

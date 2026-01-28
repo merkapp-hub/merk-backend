@@ -89,6 +89,7 @@ const productrequestchema = new mongoose.Schema(
     },
     status: {
       type: String,
+      enum: ["Pending", "Preparing", "Shipped", "OutForDelivery", "Delivered", "Cancelled"],
       default: "Pending",
     },
     seller_id: {
