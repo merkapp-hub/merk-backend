@@ -2606,8 +2606,17 @@ getSellerProductByAdmin: async (req, res) => {
             const hasUserReview = productId && userReviewMap[productId];
             const stats = reviewStatsMap[productId] || { totalRatings: 0, averageRating: 0 };
 
+            // If product is populated, use its data; otherwise use saved data from order
+            const productName = item.product?.name || item.name;
+            const productPrice = item.price || item.product?.price;
+            const productImage = item.image || item.product?.image;
+
             return {
               ...item,
+              // Add product name, price, and image at the top level for easier access
+              name: productName,
+              price: productPrice,
+              image: productImage,
               isRated: !!hasUserReview, // True only if current user has reviewed
               review: hasUserReview || null,
               rating: hasUserReview ? userReviewMap[productId].rating : 0,
