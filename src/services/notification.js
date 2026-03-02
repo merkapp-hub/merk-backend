@@ -21,6 +21,12 @@ const client = new OneSignal.DefaultApi(configuration);
 
 async function sendNotification(content, player_ids, title) {
   try {
+    // Skip if no player IDs
+    if (!player_ids || player_ids.length === 0) {
+      console.log("⚠️ No player IDs found, skipping notification");
+      return null;
+    }
+
     const notification = new OneSignal.Notification();
     notification.app_id = ONESIGNAL_APP_ID;
     notification.include_subscription_ids = player_ids;
@@ -32,11 +38,16 @@ async function sendNotification(content, player_ids, title) {
         en: title,
       };
     }
-    notification.name = "Resaz";
-    return await client.createNotification(notification);
+    notification.name = "Merk";
+    
+    const response = await client.createNotification(notification);
+    console.log("✅ Notification sent successfully");
+    return response;
   } catch (err) {
-    console.log("error in send notification", content);
-    console.error("error in send notification", err);
+    console.log("⚠️ Notification failed (non-critical):", content);
+    console.error("OneSignal error:", err.message || err);
+    // Don't throw - notification failure shouldn't break order flow
+    return null;
   }
 }
 async function findDevices(user) {

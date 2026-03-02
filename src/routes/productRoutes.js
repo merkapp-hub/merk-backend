@@ -48,6 +48,11 @@ router.post("/cashcollected", authMiddleware(["user", "admin", "seller", "driver
 router.post("/changeorderstatus", authMiddleware(["user", "admin", "seller", "driver", "employee"]), product.changeorderstatus);
 router.get("/onthewaytodelivery/:id", authMiddleware(["user", "admin", "seller", "driver"]), product.onthewaytodelivery);
 router.get("/productsearch", product.productSearch);
+
+const forzaController = require('@controllers/forzaController');
+router.get("/forza/track/:orderId", authMiddleware(["user", "admin", "seller"]), forzaController.trackShipment);
+router.get("/forza/order-tracking/:orderId", authMiddleware(["user", "admin", "seller"]), forzaController.getOrderTracking);
+
 router.post("/updateProductRequest/:id", authMiddleware(["user", "admin", "seller"]), product.updaterequestProduct);
 router.get("/getProductRequest/:id", authMiddleware(["user", "admin", "seller", "driver", "employee"]), product.getrequestProductbyid);
 router.post("/nearbyorderfordriver", authMiddleware(["driver"]), product.nearbyorderfordriver);

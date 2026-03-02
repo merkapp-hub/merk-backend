@@ -37,17 +37,13 @@ module.exports = {
         let formattedSize = null;
 
         if (product.hasVariants && product.varients && product.varients.length > 0) {
-        
           const requestedSize = cartItem.selectedSize || cartItem.selectedVariant?.selected?.[0]?.value || cartItem.selectedVariant?.selected?.[0];
           
-         
           let matchingVariant = null;
           
           if (cartItem.selectedVariant?.color) {
-          
             matchingVariant = product.varients.find(v => v.color === cartItem.selectedVariant.color);
           }
-          
           
           if (!matchingVariant && requestedSize) {
             matchingVariant = product.varients.find(v => {
@@ -59,7 +55,6 @@ module.exports = {
             });
           }
           
-      
           if (!matchingVariant) {
             matchingVariant = product.varients[0];
           }
@@ -67,12 +62,10 @@ module.exports = {
           selectedVariant = matchingVariant;
           
           if (selectedVariant) {
-         
             price = selectedVariant.price || 0;
             offerPrice = selectedVariant.Offerprice || selectedVariant.price || 0;
             
-          
-            if (requestedSize && selectedVariant.selected) {
+            if (requestedSize && selectedVariant.selected && Array.isArray(selectedVariant.selected)) {
               const sizeObj = selectedVariant.selected.find(s => {
                 const sizeValue = typeof s === 'string' ? s : (s?.value || s?.label);
                 return sizeValue === requestedSize;
@@ -80,9 +73,19 @@ module.exports = {
               
               if (sizeObj && typeof sizeObj === 'object' && sizeObj.total !== undefined) {
                 stock = parseInt(sizeObj.total) || 0;
+              } else if (selectedVariant.selected.length > 0) {
+                const firstSize = selectedVariant.selected[0];
+                stock = (typeof firstSize === 'object' && firstSize.total !== undefined) 
+                  ? parseInt(firstSize.total) || 0 
+                  : selectedVariant.stock || 0;
               } else {
                 stock = selectedVariant.stock || 0;
               }
+            } else if (selectedVariant.selected && Array.isArray(selectedVariant.selected) && selectedVariant.selected.length > 0) {
+              const firstSize = selectedVariant.selected[0];
+              stock = (typeof firstSize === 'object' && firstSize.total !== undefined) 
+                ? parseInt(firstSize.total) || 0 
+                : selectedVariant.stock || 0;
             } else {
               stock = selectedVariant.stock || 0;
             }
@@ -91,18 +94,14 @@ module.exports = {
             formattedSize = requestedSize;
           }
         } else {
-       
           price = product.price_slot?.[0]?.price || 0;
           offerPrice = product.price_slot?.[0]?.Offerprice || price;
           selectedImage = product.images?.[0] || product.image;
           stock = product.stock || 0;
         }
 
-       
         const requestedQty = cartItem.quantity || 1;
         const availableStock = stock || 0;
-        
-   
         const finalQty = availableStock > 0 ? Math.min(requestedQty, availableStock) : requestedQty;
 
         return {
@@ -128,7 +127,7 @@ module.exports = {
           hasVariants: product.hasVariants,
           varients: product.varients
         };
-      }).filter(item => item !== null); // Remove deleted products
+      }).filter(item => item !== null);
 
       return response.success(res, cartItems);
     } catch (error) {
@@ -146,7 +145,6 @@ module.exports = {
         return response.success(res, { data: [] });
       }
 
-    
       const products = await Product.find({ 
         _id: { $in: productIds },
         is_verified: true,

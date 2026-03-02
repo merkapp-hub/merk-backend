@@ -191,6 +191,23 @@ const productrequestchema = new mongoose.Schema(
       unique: true,
       index: true,
     },
+    forzaShipping: {
+      trackingNumber: String,
+      shipmentId: String,
+      status: String,
+      estimatedDelivery: Date,
+      currentLocation: String,
+      history: [
+        {
+          status: String,
+          location: String,
+          timestamp: Date,
+          description: String
+        }
+      ],
+      createdAt: Date,
+      error: String
+    },
 
 
     // return: {

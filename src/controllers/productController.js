@@ -1269,6 +1269,40 @@ createProductRequest: async (req, res) => {
                 const savedOrder = await newOrder.save();
                 console.log("✅ Order saved successfully with ID:", savedOrder._id);
                
+                // Create Forza shipment for PayPal orders
+                if (payload.paymentmode === 'paypal' && payload.shipping_address?.country) {
+                    try {
+                        const forzaService = require('../services/forzaService');
+                        const shipmentResult = await forzaService.createShipment({
+                            orderId: savedOrder.orderId || savedOrder._id,
+                            shipping_address: payload.shipping_address,
+                            total: savedOrder.total,
+                            productDetail: savedOrder.productDetail,
+                            totalWeight: payload.totalWeight || savedOrder.productDetail.length * 0.5
+                        });
+
+                        if (shipmentResult.success) {
+                            await ProductRequest.findByIdAndUpdate(savedOrder._id, {
+                                forzaShipping: {
+                                    trackingNumber: shipmentResult.trackingNumber,
+                                    shipmentId: shipmentResult.shipmentId,
+                                    status: 'Created',
+                                    estimatedDelivery: shipmentResult.estimatedDelivery,
+                                    createdAt: new Date()
+                                }
+                            });
+                            console.log("📦 Forza shipment created:", shipmentResult.trackingNumber);
+                        } else {
+                            await ProductRequest.findByIdAndUpdate(savedOrder._id, {
+                                'forzaShipping.error': shipmentResult.error
+                            });
+                            console.error("❌ Forza shipment failed:", shipmentResult.error);
+                        }
+                    } catch (forzaError) {
+                        console.error("⚠️ Forza integration error:", forzaError);
+                    }
+                }
+               
                 // Send order received email immediately
                 try {
                     const { orderReceivedMail } = require('../services/mailNotification');
@@ -2884,24 +2918,23 @@ getSellerProductByAdmin: async (req, res) => {
           .text(formatPrice(order.tax), 480, yPosition);
       }
 
-      if (order.deliveryCharge && order.deliveryCharge > 0) {
-        yPosition += 20;
-        doc.fillColor('#6b7280')
-          .text('Delivery:', summaryX, yPosition)
-          .fillColor('#111827')
-          .text(formatPrice(order.deliveryCharge), 480, yPosition);
-      }
+      yPosition += 20;
+      doc.fillColor('#6b7280')
+        .text('Delivery:', summaryX, yPosition)
+        .fillColor('#111827')
+        .text(order.deliveryCharge > 0 ? formatPrice(order.deliveryCharge) : 'Free', 480, yPosition);
 
-      // Total
       yPosition += 25;
       doc.rect(50, yPosition - 5, 515, 30)
         .fill('#12344D');
 
+      const finalTotal = subtotal + (order.tax || 0) + (order.deliveryCharge || 0);
+      
       doc.fontSize(12)
         .fillColor('#ffffff')
         .text('Total Amount:', summaryX, yPosition + 5)
         .fontSize(14)
-        .text(formatPrice(order.total || 0), 480, yPosition + 5);
+        .text(formatPrice(finalTotal), 480, yPosition + 5);
 
       // Footer
       doc.fontSize(9)
