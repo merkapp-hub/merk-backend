@@ -5,14 +5,10 @@ const Product = require('@models/Product');
 // Create PayPal Order
 exports.createOrder = async (req, res) => {
   try {
-    console.log('🟢 [PayPal Backend] Create Order Request Received');
-    console.log('🟢 [PayPal Backend] Request Body:', JSON.stringify(req.body, null, 2));
-    
     const { items, shipping_address } = req.body;
     let total = Number(req.body.total);
 
     if (!items || items.length === 0) {
-      console.error('❌ [PayPal Backend] No items in cart');
       return res.status(400).json({
         status: false,
         message: 'Cart items are required'
@@ -24,29 +20,21 @@ exports.createOrder = async (req, res) => {
       return sum + (Number(item.price) * Number(item.qty));
     }, 0);
 
-    console.log('🟢 [PayPal Backend] Items:', items);
-    console.log('🟢 [PayPal Backend] Item Total Calculated:', itemTotal.toFixed(2));
-    console.log('🟢 [PayPal Backend] Total Received:', total.toFixed(2));
-    console.log('🟢 [PayPal Backend] Shipping Address:', shipping_address);
-
     // Validate shipping address required fields
     if (shipping_address) {
-      if (!shipping_address.pinCode || shipping_address.pinCode.trim() === '') {
-        console.error('❌ [PayPal Backend] Pin Code is required');
-        return res.status(400).json({
-          status: false,
-          message: 'Pin Code is required for payment processing'
-        });
-      }
+      // if (!shipping_address.pinCode || shipping_address.pinCode.trim() === '') {
+      //   return res.status(400).json({
+      //     status: false,
+      //     message: 'Pin Code is required for payment processing'
+      //   });
+      // }
       if (!shipping_address.address || shipping_address.address.trim() === '') {
-        console.error('❌ [PayPal Backend] Address is required');
         return res.status(400).json({
           status: false,
           message: 'Address is required for payment processing'
         });
       }
       if (!shipping_address.city || shipping_address.city.trim() === '') {
-        console.error('❌ [PayPal Backend] City is required');
         return res.status(400).json({
           status: false,
           message: 'City is required for payment processing'
@@ -59,18 +47,9 @@ exports.createOrder = async (req, res) => {
     
     // Ensure shipping cost is not negative
     if (shippingCost < 0) {
-      console.log('⚠️ [PayPal Backend] Negative shipping detected, adjusting...');
-      console.log('   Item Total:', itemTotal.toFixed(2));
-      console.log('   Total:', total.toFixed(2));
-      console.log('   Difference:', shippingCost.toFixed(2));
-      
-      // Adjust: Set shipping to 0 and recalculate total
       shippingCost = 0;
       total = itemTotal;
     }
-    
-    console.log('🟢 [PayPal Backend] Final Shipping Cost:', shippingCost.toFixed(2));
-    console.log('🟢 [PayPal Backend] Final Total:', total.toFixed(2));
 
     // Build purchase units with proper breakdown
     const purchase_units = [{
@@ -125,16 +104,8 @@ exports.createOrder = async (req, res) => {
       }
     });
 
-    console.log('🟢 [PayPal Backend] Sending request to PayPal...');
     const order = await client().execute(request);
-
-    console.log('✅ [PayPal Backend] Order created successfully');
-    console.log('✅ [PayPal Backend] Order ID:', order.result.id);
-    console.log('✅ [PayPal Backend] Order Status:', order.result.status);
-    console.log('✅ [PayPal Backend] Links:', order.result.links);
-
     const approvalUrl = order.result.links?.find(link => link.rel === 'approve')?.href;
-    console.log('🔗 [PayPal Backend] Approval URL:', approvalUrl);
 
     res.json({
       status: true,
@@ -144,12 +115,6 @@ exports.createOrder = async (req, res) => {
     });
 
   } catch (error) {
-    console.error('❌ [PayPal Backend] Create Order Error:', {
-      message: error.message,
-      statusCode: error.statusCode,
-      details: error.details,
-      stack: error.stack
-    });
     res.status(500).json({
       status: false,
       message: 'Failed to create PayPal order',
@@ -176,29 +141,40 @@ exports.captureOrder = async (req, res) => {
 
     const capture = await client().execute(request);
 
-    if (capture.result.status === 'COMPLETED') {
-      
-      
+    // Check actual payment capture status
+    const captureStatus = capture.result.purchase_units?.[0]?.payments?.captures?.[0]?.status;
+    const isActuallyPaid = captureStatus === 'COMPLETED';
+
+    if (capture.result.status === 'COMPLETED' && isActuallyPaid) {
       res.json({
         status: true,
         message: 'Payment completed successfully',
         data: capture.result,
-        captureId: capture.result.id
+        captureId: capture.result.purchase_units[0].payments.captures[0].id,
+        actuallyPaid: true
       });
     } else {
       res.status(400).json({
         status: false,
-        message: 'Payment not completed',
+        message: 'Payment not completed or card was declined',
+        orderStatus: capture.result.status,
+        captureStatus: captureStatus || 'NOT_CAPTURED',
+        actuallyPaid: false,
         data: capture.result
       });
     }
 
   } catch (error) {
-    console.error('PayPal Capture Order Error:', error);
-    res.status(500).json({
+    const isCardDeclined = error.message?.includes('PAYER_CANNOT_PAY') || 
+                          error.message?.includes('CARD_DECLINED') ||
+                          error.message?.includes('INSTRUMENT_DECLINED');
+    
+    res.status(error.statusCode || 500).json({
       status: false,
-      message: 'Failed to capture PayPal payment',
-      error: error.message
+      message: isCardDeclined ? 'Card was declined. Please use a valid payment method.' : 'Failed to capture PayPal payment',
+      error: error.message,
+      details: error.details,
+      actuallyPaid: false
     });
   }
 };
@@ -210,14 +186,19 @@ exports.getOrderDetails = async (req, res) => {
 
     const request = new checkoutNodeJssdk.orders.OrdersGetRequest(orderID);
     const order = await client().execute(request);
+    
+    // Check if payment was actually captured
+    const captureStatus = order.result.purchase_units?.[0]?.payments?.captures?.[0]?.status;
+    const isActuallyPaid = captureStatus === 'COMPLETED';
 
     res.json({
       status: true,
-      data: order.result
+      data: order.result,
+      actuallyPaid: isActuallyPaid,
+      captureStatus: captureStatus || 'NOT_CAPTURED'
     });
 
   } catch (error) {
-    console.error('PayPal Get Order Error:', error);
     res.status(500).json({
       status: false,
       message: 'Failed to get order details',
@@ -267,15 +248,11 @@ exports.refundPayment = async (req, res) => {
 // Process Card Payment (In-App)
 exports.processCardPayment = async (req, res) => {
   try {
-    console.log('🟢 [PayPal Backend] Card Payment Request Received');
-    console.log('🟢 [PayPal Backend] Request Body:', JSON.stringify(req.body, null, 2));
-    
     const { card, shipping_address, productDetail, total, subtotal, shipping, tax } = req.body;
     const ProductRequest = require('@models/ProductRequest');
 
     // Validate required fields
     if (!productDetail || productDetail.length === 0) {
-      console.error('❌ [PayPal Backend] No products in order');
       return res.status(400).json({
         status: false,
         message: 'Product details are required'
@@ -283,7 +260,6 @@ exports.processCardPayment = async (req, res) => {
     }
 
     if (!card || !card.number || !card.expiry || !card.cvv) {
-      console.error('❌ [PayPal Backend] Card details missing');
       return res.status(400).json({
         status: false,
         message: 'Card details are required'
@@ -291,7 +267,6 @@ exports.processCardPayment = async (req, res) => {
     }
 
     if (!total || isNaN(total) || total <= 0) {
-      console.error('❌ [PayPal Backend] Invalid total amount:', total);
       return res.status(400).json({
         status: false,
         message: 'Invalid total amount'
@@ -316,11 +291,8 @@ exports.processCardPayment = async (req, res) => {
       });
     }
 
-    console.log('🟢 [PayPal Backend] Creating order with card payment...');
-
     // Generate unique PayPal-Request-Id
     const requestId = `CARD-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-    console.log('🟢 [PayPal Backend] Request ID:', requestId);
 
     // Create PayPal order with card payment source
     const request = new checkoutNodeJssdk.orders.OrdersCreateRequest();
@@ -339,14 +311,6 @@ exports.processCardPayment = async (req, res) => {
     
     // Recalculate total to match breakdown
     const calculatedTotal = itemTotal + shippingCost + taxAmount;
-    
-    console.log('🟢 [PayPal Backend] Amount Breakdown:', {
-      itemTotal: itemTotal.toFixed(2),
-      shipping: shippingCost.toFixed(2),
-      tax: taxAmount.toFixed(2),
-      calculatedTotal: calculatedTotal.toFixed(2),
-      receivedTotal: Number(total).toFixed(2)
-    });
 
     request.requestBody({
       intent: 'CAPTURE',
@@ -406,10 +370,7 @@ exports.processCardPayment = async (req, res) => {
       }]
     });
 
-    console.log('🟢 [PayPal Backend] Executing card payment...');
     const order = await client().execute(request);
-
-    console.log('🟢 [PayPal Backend] Card payment successful:', order.result.id);
 
     // Save order to database
     const newOrder = new ProductRequest({
@@ -437,8 +398,6 @@ exports.processCardPayment = async (req, res) => {
     });
 
   } catch (error) {
-    console.error('❌ [PayPal Backend] Card Payment Error:', error);
-    
     let errorMessage = 'Failed to process card payment';
     
     if (error.message.includes('INVALID_CARD_NUMBER')) {
