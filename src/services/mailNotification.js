@@ -373,7 +373,7 @@ module.exports = {
     const { orderReceivedTemplate } = require('./orderEmailTemplates');
     try {
       const html = orderReceivedTemplate({ name, orderId, orderTotal, orderDate, currencySymbol });
-      return await sendMail(email, `Order Received - ${orderId}`, html);
+      return await sendMail(email, `Pedido Recibido - ${orderId}`, html);
     } catch (err) {
       console.error("Order received mail error:", err);
       throw new Error("Could not send order received mail");
@@ -384,7 +384,7 @@ module.exports = {
     const { orderPreparingTemplate } = require('./orderEmailTemplates');
     try {
       const html = orderPreparingTemplate({ name, orderId, estimatedTime });
-      return await sendMail(email, `Order Preparing - ${orderId}`, html);
+      return await sendMail(email, `Preparando Pedido - ${orderId}`, html);
     } catch (err) {
       console.error("Order preparing mail error:", err);
       throw new Error("Could not send order preparing mail");
@@ -395,7 +395,7 @@ module.exports = {
     const { orderShippedTemplate } = require('./orderEmailTemplates');
     try {
       const html = orderShippedTemplate({ name, orderId, trackingNumber, estimatedDelivery });
-      return await sendMail(email, `Order Shipped - ${orderId}`, html);
+      return await sendMail(email, `Pedido Enviado - ${orderId}`, html);
     } catch (err) {
       console.error("Order shipped mail error:", err);
       throw new Error("Could not send order shipped mail");
@@ -406,7 +406,7 @@ module.exports = {
     const { outForDeliveryTemplate } = require('./orderEmailTemplates');
     try {
       const html = outForDeliveryTemplate({ name, orderId, deliveryTime });
-      return await sendMail(email, `Out for Delivery - ${orderId}`, html);
+      return await sendMail(email, `En Camino para Entrega - ${orderId}`, html);
     } catch (err) {
       console.error("Out for delivery mail error:", err);
       throw new Error("Could not send out for delivery mail");
@@ -417,7 +417,7 @@ module.exports = {
     const { orderDeliveredTemplate } = require('./orderEmailTemplates');
     try {
       const html = orderDeliveredTemplate({ name, orderId, deliveryDate, proofImage });
-      return await sendMail(email, `Order Delivered - ${orderId}`, html);
+      return await sendMail(email, `Pedido Entregado - ${orderId}`, html);
     } catch (err) {
       console.error("Order delivered mail error:", err);
       throw new Error("Could not send order delivered mail");

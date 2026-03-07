@@ -5,7 +5,7 @@ const getEmailHeader = () => `
     <tr>
       <td style="background: linear-gradient(135deg, #12344D 0%, #1a4d6f 100%); padding: 40px; text-align: center;">
         <h1 style="margin: 0; color: #ffffff; font-size: 32px; font-weight: 700;">
-          <span style="color: #E58F14;">Merk</span> Order Update
+          <span style="color: #E58F14;">Merk</span> Actualización de Pedido
         </h1>
       </td>
     </tr>
@@ -15,17 +15,17 @@ const getEmailFooter = () => `
     <tr>
       <td style="background-color: #f8fafc; padding: 30px; border-top: 1px solid #e2e8f0; text-align: center;">
         <p style="margin: 0 0 10px; color: #64748b; font-size: 14px;">
-          <strong style="color: #12344D;">Merk</strong> - Your Premium Shopping Destination
+          <strong style="color: #12344D;">Merk</strong> - Tu Destino de Compras Premium
         </p>
         <p style="margin: 0; color: #94a3b8; font-size: 12px;">
-          &copy; ${new Date().getFullYear()} Merk. All rights reserved.
+          &copy; ${new Date().getFullYear()} Merk. Todos los derechos reservados.
         </p>
       </td>
     </tr>
   </table>
 `;
 
-// 1. Order Received Email (Immediately after order placement)
+
 const orderReceivedTemplate = ({ name, orderId, orderTotal, orderDate, currencySymbol = '$' }) => `
 <!DOCTYPE html>
 <html>
@@ -39,29 +39,29 @@ const orderReceivedTemplate = ({ name, orderId, orderTotal, orderDate, currencyS
       <td style="padding: 40px;">
         <div style="text-align: center; margin-bottom: 30px;">
           <div style="display: inline-block; background-color: #10b981; color: white; padding: 12px 24px; border-radius: 50px; font-size: 16px; font-weight: 600;">
-            ✓ Order Received
+            ✓ Pedido Recibido
           </div>
         </div>
         
-        <h2 style="color: #12344D; font-size: 24px; margin: 0 0 15px;">Hello ${name}! 👋</h2>
+        <h2 style="color: #12344D; font-size: 24px; margin: 0 0 15px;">¡Hola ${name}! 👋</h2>
         
         <p style="color: #4a5568; font-size: 16px; line-height: 1.6; margin: 0 0 25px;">
-          Thank you for your order! We've received your order and will start processing it shortly.
+          ¡Gracias por tu pedido! Hemos recibido tu pedido y comenzaremos a procesarlo en breve.
         </p>
 
         <div style="background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%); border-left: 4px solid #10b981; border-radius: 12px; padding: 25px; margin: 25px 0;">
-          <h3 style="margin: 0 0 15px; color: #12344D; font-size: 18px;">📦 Order Details</h3>
+          <h3 style="margin: 0 0 15px; color: #12344D; font-size: 18px;">📦 Detalles del Pedido</h3>
           <table style="width: 100%;">
             <tr>
-              <td style="padding: 8px 0; color: #64748b;">Order ID:</td>
+              <td style="padding: 8px 0; color: #64748b;">ID del Pedido:</td>
               <td style="padding: 8px 0; color: #12344D; font-weight: 600; text-align: right;">${orderId}</td>
             </tr>
             <tr>
-              <td style="padding: 8px 0; color: #64748b;">Order Date:</td>
+              <td style="padding: 8px 0; color: #64748b;">Fecha del Pedido:</td>
               <td style="padding: 8px 0; color: #12344D; font-weight: 600; text-align: right;">${orderDate}</td>
             </tr>
             <tr>
-              <td style="padding: 8px 0; color: #64748b;">Total Amount:</td>
+              <td style="padding: 8px 0; color: #64748b;">Monto Total:</td>
               <td style="padding: 8px 0; color: #E58F14; font-weight: 700; font-size: 18px; text-align: right;">${currencySymbol}${orderTotal}</td>
             </tr>
           </table>
@@ -69,13 +69,13 @@ const orderReceivedTemplate = ({ name, orderId, orderTotal, orderDate, currencyS
 
         <div style="background-color: #fef3c7; border-left: 4px solid #f59e0b; border-radius: 8px; padding: 15px; margin: 20px 0;">
           <p style="margin: 0; color: #92400e; font-size: 14px;">
-            <strong>What's Next?</strong><br>
-            We'll send you another email once we start preparing your order.
+            <strong>¿Qué sigue?</strong><br>
+            Te enviaremos otro correo una vez que comencemos a preparar tu pedido.
           </p>
         </div>
 
         <p style="color: #64748b; font-size: 14px; margin: 30px 0 0; text-align: center;">
-          Questions? Contact us at <a href="mailto:merkapp25@gmail.com" style="color: #E58F14;">merkapp25@gmail.com</a>
+          ¿Preguntas? Contáctanos en <a href="mailto:merkapp25@gmail.com" style="color: #E58F14;">merkapp25@gmail.com</a>
         </p>
       </td>
     </tr>
@@ -84,8 +84,8 @@ const orderReceivedTemplate = ({ name, orderId, orderTotal, orderDate, currencyS
 </html>
 `;
 
-// 2. Order Preparing Email
-const orderPreparingTemplate = ({ name, orderId, estimatedTime = '1-2 business days' }) => `
+
+const orderPreparingTemplate = ({ name, orderId, estimatedTime = '1-2 días hábiles' }) => `
 <!DOCTYPE html>
 <html>
 <head>
@@ -98,29 +98,29 @@ const orderPreparingTemplate = ({ name, orderId, estimatedTime = '1-2 business d
       <td style="padding: 40px;">
         <div style="text-align: center; margin-bottom: 30px;">
           <div style="display: inline-block; background-color: #3b82f6; color: white; padding: 12px 24px; border-radius: 50px; font-size: 16px; font-weight: 600;">
-            📦 Preparing Your Order
+            📦 Preparando tu Pedido
           </div>
         </div>
         
-        <h2 style="color: #12344D; font-size: 24px; margin: 0 0 15px;">Great News, ${name}! 🎉</h2>
+        <h2 style="color: #12344D; font-size: 24px; margin: 0 0 15px;">¡Buenas Noticias, ${name}! 🎉</h2>
         
         <p style="color: #4a5568; font-size: 16px; line-height: 1.6; margin: 0 0 25px;">
-          We're now preparing your order for shipment. Our team is carefully packing your items to ensure they arrive in perfect condition.
+          Ahora estamos preparando tu pedido para el envío. Nuestro equipo está empacando cuidadosamente tus artículos para asegurar que lleguen en perfectas condiciones.
         </p>
 
         <div style="background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%); border-left: 4px solid #3b82f6; border-radius: 12px; padding: 25px; margin: 25px 0;">
-          <h3 style="margin: 0 0 15px; color: #1e40af; font-size: 18px;">📋 Order Status</h3>
+          <h3 style="margin: 0 0 15px; color: #1e40af; font-size: 18px;">📋 Estado del Pedido</h3>
           <table style="width: 100%;">
             <tr>
-              <td style="padding: 8px 0; color: #1e3a8a;">Order ID:</td>
+              <td style="padding: 8px 0; color: #1e3a8a;">ID del Pedido:</td>
               <td style="padding: 8px 0; color: #1e40af; font-weight: 600; text-align: right;">${orderId}</td>
             </tr>
             <tr>
-              <td style="padding: 8px 0; color: #1e3a8a;">Status:</td>
-              <td style="padding: 8px 0; color: #3b82f6; font-weight: 600; text-align: right;">Preparing</td>
+              <td style="padding: 8px 0; color: #1e3a8a;">Estado:</td>
+              <td style="padding: 8px 0; color: #3b82f6; font-weight: 600; text-align: right;">Preparando</td>
             </tr>
             <tr>
-              <td style="padding: 8px 0; color: #1e3a8a;">Estimated Shipping:</td>
+              <td style="padding: 8px 0; color: #1e3a8a;">Envío Estimado:</td>
               <td style="padding: 8px 0; color: #1e40af; font-weight: 600; text-align: right;">${estimatedTime}</td>
             </tr>
           </table>
@@ -135,14 +135,14 @@ const orderPreparingTemplate = ({ name, orderId, estimatedTime = '1-2 business d
             <div style="width: 30px; height: 30px; background-color: #e5e7eb; border-radius: 50%; display: flex; align-items: center; justify-center; color: #9ca3af; font-weight: bold;">3</div>
           </div>
           <div style="display: flex; justify-content: space-between; margin-top: 10px; font-size: 12px; color: #64748b;">
-            <span>Received</span>
-            <span style="color: #3b82f6; font-weight: 600;">Preparing</span>
-            <span>Shipped</span>
+            <span>Recibido</span>
+            <span style="color: #3b82f6; font-weight: 600;">Preparando</span>
+            <span>Enviado</span>
           </div>
         </div>
 
         <p style="color: #64748b; font-size: 14px; margin: 30px 0 0; text-align: center;">
-          We'll notify you as soon as your order ships!
+          ¡Te notificaremos tan pronto como tu pedido sea enviado!
         </p>
       </td>
     </tr>
@@ -151,8 +151,7 @@ const orderPreparingTemplate = ({ name, orderId, estimatedTime = '1-2 business d
 </html>
 `;
 
-// 3. Order Shipped Email
-const orderShippedTemplate = ({ name, orderId, trackingNumber = 'N/A', estimatedDelivery = '2-3 business days' }) => `
+const orderShippedTemplate = ({ name, orderId, trackingNumber = 'N/A', estimatedDelivery = '2-3 días hábiles' }) => `
 <!DOCTYPE html>
 <html>
 <head>
@@ -165,29 +164,29 @@ const orderShippedTemplate = ({ name, orderId, trackingNumber = 'N/A', estimated
       <td style="padding: 40px;">
         <div style="text-align: center; margin-bottom: 30px;">
           <div style="display: inline-block; background-color: #8b5cf6; color: white; padding: 12px 24px; border-radius: 50px; font-size: 16px; font-weight: 600;">
-            🚚 Order Shipped
+            🚚 Pedido Enviado
           </div>
         </div>
         
-        <h2 style="color: #12344D; font-size: 24px; margin: 0 0 15px;">Your Order is On Its Way, ${name}! 📦</h2>
+        <h2 style="color: #12344D; font-size: 24px; margin: 0 0 15px;">¡Tu Pedido Está en Camino, ${name}! 📦</h2>
         
         <p style="color: #4a5568; font-size: 16px; line-height: 1.6; margin: 0 0 25px;">
-          Good news! Your order has been shipped and is on its way to you. You can expect delivery soon.
+          ¡Buenas noticias! Tu pedido ha sido enviado y está en camino hacia ti. Puedes esperar la entrega pronto.
         </p>
 
         <div style="background: linear-gradient(135deg, #ede9fe 0%, #ddd6fe 100%); border-left: 4px solid #8b5cf6; border-radius: 12px; padding: 25px; margin: 25px 0;">
-          <h3 style="margin: 0 0 15px; color: #6b21a8; font-size: 18px;">🚚 Shipping Details</h3>
+          <h3 style="margin: 0 0 15px; color: #6b21a8; font-size: 18px;">🚚 Detalles de Envío</h3>
           <table style="width: 100%;">
             <tr>
-              <td style="padding: 8px 0; color: #5b21b6;">Order ID:</td>
+              <td style="padding: 8px 0; color: #5b21b6;">ID del Pedido:</td>
               <td style="padding: 8px 0; color: #6b21a8; font-weight: 600; text-align: right;">${orderId}</td>
             </tr>
             <tr>
-              <td style="padding: 8px 0; color: #5b21b6;">Tracking Number:</td>
+              <td style="padding: 8px 0; color: #5b21b6;">Número de Rastreo:</td>
               <td style="padding: 8px 0; color: #8b5cf6; font-weight: 600; text-align: right;">${trackingNumber}</td>
             </tr>
             <tr>
-              <td style="padding: 8px 0; color: #5b21b6;">Estimated Delivery:</td>
+              <td style="padding: 8px 0; color: #5b21b6;">Entrega Estimada:</td>
               <td style="padding: 8px 0; color: #6b21a8; font-weight: 600; text-align: right;">${estimatedDelivery}</td>
             </tr>
           </table>
@@ -202,14 +201,14 @@ const orderShippedTemplate = ({ name, orderId, trackingNumber = 'N/A', estimated
             <div style="width: 30px; height: 30px; background-color: #8b5cf6; border-radius: 50%; display: flex; align-items: center; justify-center; color: white; font-weight: bold;">3</div>
           </div>
           <div style="display: flex; justify-content: space-between; margin-top: 10px; font-size: 12px; color: #64748b;">
-            <span>Received</span>
-            <span>Prepared</span>
-            <span style="color: #8b5cf6; font-weight: 600;">Shipped</span>
+            <span>Recibido</span>
+            <span>Preparado</span>
+            <span style="color: #8b5cf6; font-weight: 600;">Enviado</span>
           </div>
         </div>
 
         <p style="color: #64748b; font-size: 14px; margin: 30px 0 0; text-align: center;">
-          We'll notify you when your order is out for delivery!
+          ¡Te notificaremos cuando tu pedido esté en camino para entrega!
         </p>
       </td>
     </tr>
@@ -218,8 +217,8 @@ const orderShippedTemplate = ({ name, orderId, trackingNumber = 'N/A', estimated
 </html>
 `;
 
-// 4. Out for Delivery Email
-const outForDeliveryTemplate = ({ name, orderId, deliveryTime = 'today' }) => `
+
+const outForDeliveryTemplate = ({ name, orderId, deliveryTime = 'hoy' }) => `
 <!DOCTYPE html>
 <html>
 <head>
@@ -232,29 +231,29 @@ const outForDeliveryTemplate = ({ name, orderId, deliveryTime = 'today' }) => `
       <td style="padding: 40px;">
         <div style="text-align: center; margin-bottom: 30px;">
           <div style="display: inline-block; background-color: #f59e0b; color: white; padding: 12px 24px; border-radius: 50px; font-size: 16px; font-weight: 600;">
-            🚴 Out for Delivery
+            🚴 En Camino para Entrega
           </div>
         </div>
         
-        <h2 style="color: #12344D; font-size: 24px; margin: 0 0 15px;">Almost There, ${name}! 🎯</h2>
+        <h2 style="color: #12344D; font-size: 24px; margin: 0 0 15px;">¡Casi Llega, ${name}! 🎯</h2>
         
         <p style="color: #4a5568; font-size: 16px; line-height: 1.6; margin: 0 0 25px;">
-          Your order is out for delivery and will arrive soon. Please ensure someone is available to receive the package.
+          Tu pedido está en camino para entrega y llegará pronto. Por favor asegúrate de que alguien esté disponible para recibir el paquete.
         </p>
 
         <div style="background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%); border-left: 4px solid #f59e0b; border-radius: 12px; padding: 25px; margin: 25px 0;">
-          <h3 style="margin: 0 0 15px; color: #92400e; font-size: 18px;">🚴 Delivery Information</h3>
+          <h3 style="margin: 0 0 15px; color: #92400e; font-size: 18px;">🚴 Información de Entrega</h3>
           <table style="width: 100%;">
             <tr>
-              <td style="padding: 8px 0; color: #78350f;">Order ID:</td>
+              <td style="padding: 8px 0; color: #78350f;">ID del Pedido:</td>
               <td style="padding: 8px 0; color: #92400e; font-weight: 600; text-align: right;">${orderId}</td>
             </tr>
             <tr>
-              <td style="padding: 8px 0; color: #78350f;">Status:</td>
-              <td style="padding: 8px 0; color: #f59e0b; font-weight: 600; text-align: right;">Out for Delivery</td>
+              <td style="padding: 8px 0; color: #78350f;">Estado:</td>
+              <td style="padding: 8px 0; color: #f59e0b; font-weight: 600; text-align: right;">En Camino para Entrega</td>
             </tr>
             <tr>
-              <td style="padding: 8px 0; color: #78350f;">Expected Delivery:</td>
+              <td style="padding: 8px 0; color: #78350f;">Entrega Esperada:</td>
               <td style="padding: 8px 0; color: #92400e; font-weight: 600; text-align: right;">${deliveryTime}</td>
             </tr>
           </table>
@@ -271,22 +270,22 @@ const outForDeliveryTemplate = ({ name, orderId, deliveryTime = 'today' }) => `
             <div style="width: 30px; height: 30px; background-color: #f59e0b; border-radius: 50%; display: flex; align-items: center; justify-center; color: white; font-weight: bold;">4</div>
           </div>
           <div style="display: flex; justify-content: space-between; margin-top: 10px; font-size: 11px; color: #64748b;">
-            <span>Received</span>
-            <span>Prepared</span>
-            <span>Shipped</span>
-            <span style="color: #f59e0b; font-weight: 600;">Out for Delivery</span>
+            <span>Recibido</span>
+            <span>Preparado</span>
+            <span>Enviado</span>
+            <span style="color: #f59e0b; font-weight: 600;">En Camino</span>
           </div>
         </div>
 
         <div style="background-color: #dbeafe; border-left: 4px solid #3b82f6; border-radius: 8px; padding: 15px; margin: 20px 0;">
           <p style="margin: 0; color: #1e40af; font-size: 14px;">
-            <strong>📍 Delivery Tip:</strong><br>
-            Please keep your phone handy. Our delivery partner may call you for directions.
+            <strong>📍 Consejo de Entrega:</strong><br>
+            Por favor mantén tu teléfono a mano. Nuestro socio de entrega puede llamarte para indicaciones.
           </p>
         </div>
 
         <p style="color: #64748b; font-size: 14px; margin: 30px 0 0; text-align: center;">
-          Thank you for shopping with Merk!
+          ¡Gracias por comprar con Merk!
         </p>
       </td>
     </tr>
@@ -295,7 +294,7 @@ const outForDeliveryTemplate = ({ name, orderId, deliveryTime = 'today' }) => `
 </html>
 `;
 
-// 5. Order Delivered Email (with proof image)
+
 const orderDeliveredTemplate = ({ name, orderId, deliveryDate, proofImage = null }) => `
 <!DOCTYPE html>
 <html>
@@ -309,38 +308,38 @@ const orderDeliveredTemplate = ({ name, orderId, deliveryDate, proofImage = null
       <td style="padding: 40px;">
         <div style="text-align: center; margin-bottom: 30px;">
           <div style="display: inline-block; background-color: #10b981; color: white; padding: 12px 24px; border-radius: 50px; font-size: 16px; font-weight: 600;">
-            ✓ Delivered Successfully
+            ✓ Entregado Exitosamente
           </div>
         </div>
         
-        <h2 style="color: #12344D; font-size: 24px; margin: 0 0 15px;">Delivered, ${name}! 🎉</h2>
+        <h2 style="color: #12344D; font-size: 24px; margin: 0 0 15px;">¡Entregado, ${name}! 🎉</h2>
         
         <p style="color: #4a5568; font-size: 16px; line-height: 1.6; margin: 0 0 25px;">
-          Great news! Your order has been successfully delivered. We hope you love your purchase!
+          ¡Buenas noticias! Tu pedido ha sido entregado exitosamente. ¡Esperamos que ames tu compra!
         </p>
 
         <div style="background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%); border-left: 4px solid #10b981; border-radius: 12px; padding: 25px; margin: 25px 0;">
-          <h3 style="margin: 0 0 15px; color: #065f46; font-size: 18px;">✓ Delivery Confirmation</h3>
+          <h3 style="margin: 0 0 15px; color: #065f46; font-size: 18px;">✓ Confirmación de Entrega</h3>
           <table style="width: 100%;">
             <tr>
-              <td style="padding: 8px 0; color: #047857;">Order ID:</td>
+              <td style="padding: 8px 0; color: #047857;">ID del Pedido:</td>
               <td style="padding: 8px 0; color: #065f46; font-weight: 600; text-align: right;">${orderId}</td>
             </tr>
             <tr>
-              <td style="padding: 8px 0; color: #047857;">Delivered On:</td>
+              <td style="padding: 8px 0; color: #047857;">Entregado el:</td>
               <td style="padding: 8px 0; color: #10b981; font-weight: 600; text-align: right;">${deliveryDate}</td>
             </tr>
             <tr>
-              <td style="padding: 8px 0; color: #047857;">Status:</td>
-              <td style="padding: 8px 0; color: #10b981; font-weight: 700; text-align: right;">DELIVERED ✓</td>
+              <td style="padding: 8px 0; color: #047857;">Estado:</td>
+              <td style="padding: 8px 0; color: #10b981; font-weight: 700; text-align: right;">ENTREGADO ✓</td>
             </tr>
           </table>
         </div>
 
         ${proofImage ? `
         <div style="margin: 25px 0; text-align: center;">
-          <h3 style="color: #12344D; font-size: 16px; margin: 0 0 15px;">📸 Delivery Proof</h3>
-          <img src="${proofImage}" alt="Delivery Proof" style="max-width: 100%; height: auto; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1);" />
+          <h3 style="color: #12344D; font-size: 16px; margin: 0 0 15px;">📸 Prueba de Entrega</h3>
+          <img src="${proofImage}" alt="Prueba de Entrega" style="max-width: 100%; height: auto; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1);" />
         </div>
         ` : ''}
 
@@ -357,23 +356,23 @@ const orderDeliveredTemplate = ({ name, orderId, deliveryDate, proofImage = null
             <div style="width: 30px; height: 30px; background-color: #10b981; border-radius: 50%; display: flex; align-items: center; justify-center; color: white; font-weight: bold;">✓</div>
           </div>
           <div style="display: flex; justify-content: space-between; margin-top: 10px; font-size: 10px; color: #10b981; font-weight: 600;">
-            <span>Received</span>
-            <span>Prepared</span>
-            <span>Shipped</span>
-            <span>Out for Delivery</span>
-            <span>Delivered</span>
+            <span>Recibido</span>
+            <span>Preparado</span>
+            <span>Enviado</span>
+            <span>En Camino</span>
+            <span>Entregado</span>
           </div>
         </div>
 
         <div style="background-color: #fef3c7; border-left: 4px solid #f59e0b; border-radius: 8px; padding: 15px; margin: 20px 0;">
           <p style="margin: 0; color: #92400e; font-size: 14px;">
-            <strong>💬 We'd Love Your Feedback!</strong><br>
-            How was your experience? Please take a moment to rate your purchase.
+            <strong>💬 ¡Nos Encantaría Tu Opinión!</strong><br>
+            ¿Cómo fue tu experiencia? Por favor tómate un momento para calificar tu compra.
           </p>
         </div>
 
         <p style="color: #64748b; font-size: 14px; margin: 30px 0 0; text-align: center;">
-          Thank you for choosing Merk! We hope to serve you again soon. 💙
+          ¡Gracias por elegir Merk! Esperamos servirte nuevamente pronto. 💙
         </p>
       </td>
     </tr>

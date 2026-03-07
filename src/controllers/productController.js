@@ -7,7 +7,7 @@ const Servicefee = require("@models/Servicefee");
 const response = require("../responses");
 const mailNotification = require("../services/mailNotification");
 const { notify } = require("../services/notification");
-// const { User } = require("@onesignal/node-onesignal");
+const forzaService = require("../services/forzaService");
 const Review = require("@models/Review");
 const Favourite = require("@models/Favorite");
 const Category = require("@models/Category");
@@ -935,7 +935,42 @@ updateProduct: async (req, res) => {
         savedOrders.push(savedOrder);
         console.log('✅ Order created successfully. Order ID:', savedOrder._id);
         
-        // Generate delivery label for each product in the order
+        try {
+          const totalWeight = sellerOrders[sellerId].productDetail.reduce((sum, item) => {
+            return sum + (item.qty * 0.5);
+          }, 0);
+
+          const shipmentData = {
+            orderId: savedOrder._id,
+            shipping_address: payload.shipping_address,
+            productDetail: sellerOrders[sellerId].productDetail,
+            total: sellerOrders[sellerId].total,
+            totalWeight: totalWeight
+          };
+
+          const shipmentResult = await forzaService.createShipment(shipmentData);
+
+          if (shipmentResult.success) {
+            await ProductRequest.findByIdAndUpdate(savedOrder._id, {
+              forzaShipping: {
+                trackingNumber: shipmentResult.trackingNumber,
+                shipmentId: shipmentResult.shipmentId,
+                status: 'Pending',
+                estimatedDelivery: shipmentResult.estimatedDelivery,
+                createdAt: new Date()
+              }
+            });
+            console.log('✅ Forza shipment created:', shipmentResult.trackingNumber);
+          } else {
+            await ProductRequest.findByIdAndUpdate(savedOrder._id, {
+              'forzaShipping.error': shipmentResult.error
+            });
+            console.error('❌ Forza shipment failed:', shipmentResult.error);
+          }
+        } catch (forzaError) {
+          console.error('❌ Forza integration error:', forzaError.message);
+        }
+        
         console.log('📦 Starting delivery label generation for order items:', sellerOrders[sellerId].productDetail.length);
         
         for (const [index, item] of sellerOrders[sellerId].productDetail.entries()) {
@@ -2358,8 +2393,8 @@ getSellerProductByAdmin: async (req, res) => {
               
               await notify(
                 product.user._id,
-                "Order delivered",
-                "Your order has been delivered successfully"
+                "Pedido entregado",
+                "Tu pedido ha sido entregado exitosamente"
               );
               break;
           }
@@ -2864,18 +2899,16 @@ getSellerProductByAdmin: async (req, res) => {
         .text('Price', 380, tableTop + 8)
         .text('Total', 480, tableTop + 8);
 
-      // Table rows
       let yPosition = tableTop + 35;
-      let subtotal = 0;
+      let itemsTotal = 0;
 
       order.productDetail.forEach((item, index) => {
         const productName = item.product?.name || item.name || 'Product';
         const qty = item.qty || item.quantity || 1;
         const price = item.price || 0;
         const total = qty * price;
-        subtotal += total;
+        itemsTotal += total;
 
-        // Alternate row colors
         if (index % 2 === 0) {
           doc.rect(50, yPosition - 5, 515, 25).fill('#f9fafb');
         }
@@ -2900,35 +2933,35 @@ getSellerProductByAdmin: async (req, res) => {
         yPosition += 30;
       });
 
-      // Summary section
       yPosition += 20;
       const summaryX = 380;
+
+      const taxAmount = order.tax || 0;
+      const deliveryCharge = order.deliveryCharge || 0;
 
       doc.fontSize(10)
         .fillColor('#6b7280')
         .text('Subtotal:', summaryX, yPosition)
         .fillColor('#111827')
-        .text(formatPrice(subtotal), 480, yPosition);
+        .text(formatPrice(itemsTotal), 480, yPosition);
 
-      if (order.tax && order.tax > 0) {
-        yPosition += 20;
-        doc.fillColor('#6b7280')
-          .text('Tax:', summaryX, yPosition)
-          .fillColor('#111827')
-          .text(formatPrice(order.tax), 480, yPosition);
-      }
+      yPosition += 20;
+      doc.fillColor('#6b7280')
+        .text('Taxes:', summaryX, yPosition)
+        .fillColor('#111827')
+        .text(formatPrice(taxAmount), 480, yPosition);
 
       yPosition += 20;
       doc.fillColor('#6b7280')
         .text('Delivery:', summaryX, yPosition)
         .fillColor('#111827')
-        .text(order.deliveryCharge > 0 ? formatPrice(order.deliveryCharge) : 'Free', 480, yPosition);
+        .text(deliveryCharge > 0 ? formatPrice(deliveryCharge) : 'Free', 480, yPosition);
 
       yPosition += 25;
       doc.rect(50, yPosition - 5, 515, 30)
         .fill('#12344D');
 
-      const finalTotal = subtotal + (order.tax || 0) + (order.deliveryCharge || 0);
+      const finalTotal = itemsTotal + taxAmount + deliveryCharge;
       
       doc.fontSize(12)
         .fillColor('#ffffff')
