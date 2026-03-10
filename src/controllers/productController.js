@@ -8,6 +8,7 @@ const response = require("../responses");
 const mailNotification = require("../services/mailNotification");
 const { notify } = require("../services/notification");
 const forzaService = require("../services/forzaService");
+const oneSignalService = require("../services/oneSignalService");
 const Review = require("@models/Review");
 const Favourite = require("@models/Favorite");
 const Category = require("@models/Category");
@@ -1360,12 +1361,33 @@ createProductRequest: async (req, res) => {
                     }
                 } catch (emailError) {
                     console.error("⚠️ Error sending order received email:", emailError);
-                    // Don't fail the order if email fails
                 }
                 
-                
                 savedOrders.push(savedOrder);
-                
+
+                const Notification = require("@models/Notification");
+                try {
+                    const notification = new Notification({
+                        title: "New Order Received",
+                        description: `You have received a new order #${savedOrder.orderId}. Please review and approve.`,
+                        for: [sellerId],
+                        type: "order",
+                        orderId: savedOrder._id,
+                        isRead: false
+                    });
+                    await notification.save();
+
+                    const seller = await User.findById(sellerId);
+                    if (seller && seller.email) {
+                        await mailNotification.sendNotification(
+                            [seller.email],
+                            "New Order Received",
+                            `You have received a new order #${savedOrder.orderId}. Please login to your seller panel to review and approve the order.`
+                        );
+                    }
+                } catch (notifError) {
+                    console.error("⚠️ Error sending seller notification:", notifError);
+                }
 
                 for (const productItem of sellerOrders[sellerId].productDetail) {
                     await Product.findByIdAndUpdate(
@@ -1914,6 +1936,17 @@ createProductRequest: async (req, res) => {
       console.log(order);
 
       await order.save();
+
+      // Send OneSignal refund notification
+      try {
+        const user = await User.findById(order.user);
+        if (user) {
+          const refundAmount = orderedProduct.returnDetails.refundAmount || returnAmount;
+          await oneSignalService.refundProcessed(order, user, refundAmount);
+        }
+      } catch (notificationError) {
+        console.error('OneSignal refund notification error:', notificationError);
+      }
 
       return response.success(res, {
         data: order,
@@ -3438,6 +3471,276 @@ uploadImagesBase64: async (req, res) => {
       message: 'Failed to upload images',
       error: error.message
     });
+  }
+},
+
+approveOrder: async (req, res) => {
+  try {
+    const { orderId } = req.body;
+    const sellerId = req.user.id;
+
+    const order = await ProductRequest.findById(orderId);
+
+    if (!order) {
+      return res.status(404).json({
+        status: false,
+        message: "Order not found"
+      });
+    }
+
+    if (order.seller_id.toString() !== sellerId) {
+      return res.status(403).json({
+        status: false,
+        message: "Unauthorized"
+      });
+    }
+
+    if (order.sellerApprovalStatus !== "Pending") {
+      return res.status(400).json({
+        status: false,
+        message: `Order already ${order.sellerApprovalStatus}`
+      });
+    }
+
+    order.sellerApprovalStatus = "Approved";
+    order.status = "SellerApproved";
+    order.sellerApprovedAt = new Date();
+    await order.save();
+
+    const Notification = require("@models/Notification");
+    const notification = new Notification({
+      title: "Order Approved",
+      description: `Your order #${order.orderId} has been approved and is being prepared.`,
+      for: [order.user],
+      type: "order",
+      orderId: order._id,
+      isRead: false
+    });
+    await notification.save();
+
+    const customer = await User.findById(order.user);
+    if (customer && customer.email) {
+      try {
+        await mailNotification.sendNotification(
+          [customer.email],
+          "Order Approved",
+          `Your order #${order.orderId} has been approved by the seller and is being prepared for shipment.`
+        );
+      } catch (emailError) {
+        console.error("Email notification failed:", emailError);
+      }
+    }
+
+    return res.status(200).json({
+      status: true,
+      message: "Order approved successfully",
+      data: order
+    });
+  } catch (error) {
+    console.error("Approve order error:", error);
+    return res.status(500).json({
+      status: false,
+      message: error.message || "Failed to approve order"
+    });
+  }
+},
+
+rejectOrder: async (req, res) => {
+  try {
+    const { orderId, reason } = req.body;
+    const sellerId = req.user.id;
+
+    const order = await ProductRequest.findById(orderId);
+
+    if (!order) {
+      return res.status(404).json({
+        status: false,
+        message: "Order not found"
+      });
+    }
+
+    if (order.seller_id.toString() !== sellerId) {
+      return res.status(403).json({
+        status: false,
+        message: "Unauthorized"
+      });
+    }
+
+    if (order.sellerApprovalStatus !== "Pending") {
+      return res.status(400).json({
+        status: false,
+        message: `Order already ${order.sellerApprovalStatus}`
+      });
+    }
+
+    order.sellerApprovalStatus = "Rejected";
+    order.status = "SellerRejected";
+    order.rejectionReason = reason || "Seller rejected the order";
+    await order.save();
+
+    const Notification = require("@models/Notification");
+    const notification = new Notification({
+      title: "Order Rejected",
+      description: `Your order #${order.orderId} has been rejected. ${reason || ""}`,
+      for: [order.user],
+      type: "order",
+      orderId: order._id,
+      isRead: false
+    });
+    await notification.save();
+
+    const customer = await User.findById(order.user);
+    if (customer && customer.email) {
+      try {
+        await mailNotification.sendNotification(
+          [customer.email],
+          "Order Rejected",
+          `Your order #${order.orderId} has been rejected by the seller. ${reason || ""}`
+        );
+      } catch (emailError) {
+        console.error("Email notification failed:", emailError);
+      }
+    }
+
+    return res.status(200).json({
+      status: true,
+      message: "Order rejected",
+      data: order
+    });
+  } catch (error) {
+    console.error("Reject order error:", error);
+    return res.status(500).json({
+      status: false,
+      message: error.message || "Failed to reject order"
+    });
+  }
+},
+
+getSellerPendingOrders: async (req, res) => {
+  try {
+    const sellerId = req.user.id;
+    const { status, page = 1, limit = 10 } = req.query;
+
+    console.log('🔍 getSellerPendingOrders DEBUG:', {
+      sellerId,
+      status,
+      page,
+      limit,
+      requestQuery: req.query
+    });
+
+    const query = { seller_id: sellerId };
+    
+    if (status && status !== "all") {
+      query.sellerApprovalStatus = status;
+    }
+
+    console.log('🔍 Final query:', query);
+
+    const skip = (page - 1) * limit;
+
+    // Debug: Check total orders for this seller (all statuses)
+    const allOrdersCount = await ProductRequest.countDocuments({ seller_id: sellerId });
+    console.log('🔍 Total orders for seller (all statuses):', allOrdersCount);
+
+    // Debug: Check orders by status
+    const pendingCount = await ProductRequest.countDocuments({ 
+      seller_id: sellerId, 
+      sellerApprovalStatus: "Pending" 
+    });
+    const approvedCount = await ProductRequest.countDocuments({ 
+      seller_id: sellerId, 
+      sellerApprovalStatus: "Approved" 
+    });
+    const rejectedCount = await ProductRequest.countDocuments({ 
+      seller_id: sellerId, 
+      sellerApprovalStatus: "Rejected" 
+    });
+
+    console.log('🔍 Orders by status:', {
+      pending: pendingCount,
+      approved: approvedCount,
+      rejected: rejectedCount,
+      total: allOrdersCount
+    });
+
+    const orders = await ProductRequest.find(query)
+      .populate("user", "firstName lastName email number")
+      .populate("productDetail.product", "name images price_slot")
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(parseInt(limit));
+
+    const totalOrders = await ProductRequest.countDocuments(query);
+
+  
+    const orderSample = orders.slice(0, 3).map(order => ({
+      orderId: order.orderId,
+      sellerApprovalStatus: order.sellerApprovalStatus,
+      status: order.status,
+      createdAt: order.createdAt
+    }));
+  
+
+    return res.status(200).json({
+      status: true,
+      data: orders,
+      pagination: {
+        total: totalOrders,
+        page: parseInt(page),
+        limit: parseInt(limit),
+        totalPages: Math.ceil(totalOrders / limit)
+      }
+    });
+  } catch (error) {
+    console.error("Get seller orders error:", error);
+    return res.status(500).json({
+      status: false,
+      message: error.message || "Failed to fetch orders"
+    });
+  }
+},
+
+// Send OneSignal notification manually
+sendNotification: async (req, res) => {
+  try {
+    const { userIds, title, message, data } = req.body;
+
+    if (!userIds || !title || !message) {
+      return response.error(res, { message: "User IDs, title, and message are required" });
+    }
+
+    const result = await oneSignalService.sendNotification(userIds, title, message, data);
+
+    return response.success(res, {
+      message: 'Notification sent successfully',
+      result: result
+    });
+
+  } catch (error) {
+    console.error('Manual notification error:', error);
+    return response.error(res, error);
+  }
+},
+
+// Get OneSignal notification history for an order
+getNotificationHistory: async (req, res) => {
+  try {
+    const { orderId } = req.params;
+
+    const order = await ProductRequest.findById(orderId).select('orderId oneSignalNotifications');
+
+    if (!order) {
+      return response.error(res, { message: "Order not found" });
+    }
+
+    return response.success(res, {
+      orderId: order.orderId,
+      notifications: order.oneSignalNotifications || []
+    });
+
+  } catch (error) {
+    return response.error(res, error);
   }
 }
 

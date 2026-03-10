@@ -15,6 +15,25 @@ const notificationSchema = new mongoose.Schema(
         ref: "User",
       },
     ],
+    type: {
+      type: String,
+      enum: ["order", "general", "payment", "withdrawal"],
+      default: "general",
+    },
+    orderId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "ProductRequest",
+    },
+    isRead: {
+      type: Boolean,
+      default: false,
+    },
+    readBy: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+      },
+    ],
   },
   {
     timestamps: true,

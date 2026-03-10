@@ -21,10 +21,11 @@ module.exports = {
       let employeeCond = {};
 
       // If the user is a seller, add seller-specific filter
-      if (req.user?.type === "SELLER") {
-        cond = { seller_id: new mongoose.Types.ObjectId(req.user.id) };
-        productCond = { userid: req.user.id };
-        employeeCond = { parent_vendor_id: req.user.id };
+      if (req.user?.type === "SELLER" || req.user?.role === "seller") {
+        const sellerId = req.user.id || req.user._id;
+        cond = { seller_id: new mongoose.Types.ObjectId(sellerId) };
+        productCond = { userid: sellerId };
+        employeeCond = { parent_vendor_id: sellerId };
       }
 
       const lastWeekStart = moment()
@@ -138,8 +139,9 @@ module.exports = {
       const currentYear = moment().year();
       let cond = {};
 
-      if (req.user?.type === "SELLER") {
-        cond = { seller_id: new mongoose.Types.ObjectId(req.user.id) };
+      if (req.user?.type === "SELLER" || req.user?.role === "seller") {
+        const sellerId = req.user.id || req.user._id;
+        cond = { seller_id: new mongoose.Types.ObjectId(sellerId) };
       }
 
       const monthlySales = await ProductRequest.aggregate([
@@ -195,8 +197,9 @@ module.exports = {
 
       let cond = {};
 
-      if (req.user?.type === "SELLER") {
-        cond = { seller_id: new mongoose.Types.ObjectId(req.user.id) };
+      if (req.user?.type === "SELLER" || req.user?.role === "seller") {
+        const sellerId = req.user.id || req.user._id;
+        cond = { seller_id: new mongoose.Types.ObjectId(sellerId) };
       }
 
       const sales = await ProductRequest.aggregate([
@@ -327,6 +330,110 @@ module.exports = {
     } catch (err) {
       console.error("Error fetching daily top-selling products:", err);
       return response.error(res, err.message || "Internal Server Error");
+    }
+  },
+
+  resetDashboardData: async (req, res) => {
+    try {
+      const { confirmationText } = req.body;
+      
+      // Double confirmation check
+      if (confirmationText !== "RESET DASHBOARD") {
+        return res.status(400).json({
+          status: false,
+          message: "Invalid confirmation text. Please type 'RESET DASHBOARD' to confirm."
+        });
+      }
+
+      let cond = {};
+      let productCond = {};
+
+      // Check user role and set conditions
+      if (req.user?.role === "seller") {
+        cond = { seller_id: new mongoose.Types.ObjectId(req.user._id) };
+        productCond = { userid: req.user._id };
+      } else if (req.user?.role === "admin") {
+        // Admin can reset all data (no conditions)
+        cond = {};
+        productCond = {};
+      } else {
+        return res.status(403).json({
+          status: false,
+          message: "Unauthorized to reset dashboard data"
+        });
+      }
+
+      // Execute reset operations one by one with error handling
+      let ordersDeleted = 0;
+      let productsReset = 0;
+      let walletsReset = 0;
+      let adminWalletsReset = 0;
+
+      // 1. Delete all orders/transactions
+      try {
+        const orderResult = await ProductRequest.deleteMany(cond);
+        ordersDeleted = orderResult.deletedCount || 0;
+      } catch (error) {
+        console.error("Error deleting orders:", error);
+      }
+
+      // 2. Reset product sold_pieces to 0
+      try {
+        const productResult = await Product.updateMany(productCond, { $set: { sold_pieces: 0 } });
+        productsReset = productResult.modifiedCount || 0;
+      } catch (error) {
+        console.error("Error resetting products:", error);
+      }
+
+      // 3. Reset wallets based on user role
+      if (req.user?.role === "seller") {
+        try {
+          const walletResult = await User.findByIdAndUpdate(req.user._id, { $set: { wallet: 0 } });
+          walletsReset = walletResult ? 1 : 0;
+        } catch (error) {
+          console.error("Error resetting seller wallet:", error);
+        }
+      } else if (req.user?.role === "admin") {
+        try {
+          const sellerWalletResult = await User.updateMany(
+            { $or: [{ type: "SELLER" }, { role: "seller" }] }, 
+            { $set: { wallet: 0 } }
+          );
+          walletsReset = sellerWalletResult.modifiedCount || 0;
+
+          const adminWalletResult = await User.updateMany(
+            { role: "admin" }, 
+            { $set: { cashReceive: 0 } }
+          );
+          adminWalletsReset = adminWalletResult.modifiedCount || 0;
+        } catch (error) {
+          console.error("Error resetting admin wallets:", error);
+        }
+      }
+
+      const resetSummary = {
+        ordersDeleted,
+        productsReset,
+        walletsReset,
+        adminWalletsReset
+      };
+
+      return res.status(200).json({
+        status: true,
+        message: "Dashboard data reset successfully",
+        data: {
+          summary: resetSummary,
+          resetBy: req.user?.role,
+          resetAt: new Date()
+        }
+      });
+      
+    } catch (error) {
+      console.error("Error in reset function:", error);
+      return res.status(500).json({
+        status: false,
+        message: error.message
+      });
     }
   },
 };

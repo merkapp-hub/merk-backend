@@ -2,6 +2,7 @@ const mongoose = require("mongoose");
 const response = require("./../responses");
 const Withdrawreq = require("@models/Withdrawreq");
 const User = require("@models/User");
+const paypalPayoutService = require("@services/paypalPayoutService");
 
 module.exports = {
   createWithdrawreq: async (req, res) => {
@@ -126,20 +127,107 @@ module.exports = {
 
   updateWithdrawreq: async (req, res) => {
     try {
-      const payload = req?.body || {};
-      const withdrawdata = await Withdrawreq.findByIdAndUpdate(payload?.id, {
-        $set: { settle: "Completed" },
-      });
+      const { id, action } = req.body;
+      
+      if (!id) {
+        return res.status(400).json({
+          status: false,
+          message: 'Withdrawal request ID is required'
+        });
+      }
 
-      await User.findByIdAndUpdate(
-        payload.seller_id,
-        { $inc: { wallet: -withdrawdata.amount } }, // Deduct amount
-        { new: true, upsert: true } // Ensure field exists
-      );
+      const withdrawdata = await Withdrawreq.findById(id).populate('request_by', 'email firstName lastName wallet');
+      
+      if (!withdrawdata) {
+        return res.status(404).json({
+          status: false,
+          message: 'Withdrawal request not found'
+        });
+      }
 
-      return response.success(res, { message: "Status update succesfully" });
+      if (withdrawdata.settle !== 'Pending') {
+        return res.status(400).json({
+          status: false,
+          message: `Request already ${withdrawdata.settle}`
+        });
+      }
+
+      if (action === 'approve') {
+        const seller = withdrawdata.request_by;
+        
+        if (!seller || !seller.email) {
+          return res.status(400).json({
+            status: false,
+            message: 'Seller email not found'
+          });
+        }
+
+        if (seller.wallet < withdrawdata.amount) {
+          return res.status(400).json({
+            status: false,
+            message: 'Insufficient wallet balance'
+          });
+        }
+
+        const payoutResult = await paypalPayoutService.createPayout(
+          seller.email,
+          withdrawdata.amount,
+          withdrawdata.note || `Withdrawal for ${seller.firstName} ${seller.lastName}`,
+          withdrawdata._id
+        );
+
+        if (payoutResult.success) {
+          await Withdrawreq.findByIdAndUpdate(id, {
+            settle: 'Completed',
+            paypalBatchId: payoutResult.batchId,
+            paypalStatus: payoutResult.batchStatus
+          });
+
+          await User.findByIdAndUpdate(
+            seller._id,
+            { $inc: { wallet: -withdrawdata.amount } }
+          );
+
+          return res.status(200).json({
+            status: true,
+            message: 'Withdrawal approved and payout initiated',
+            data: {
+              batchId: payoutResult.batchId,
+              status: payoutResult.batchStatus
+            }
+          });
+        } else {
+          await Withdrawreq.findByIdAndUpdate(id, {
+            settle: 'Rejected',
+            note: `${withdrawdata.note || ''} - PayPal Error: ${payoutResult.error}`
+          });
+
+          return res.status(400).json({
+            status: false,
+            message: `Payout failed: ${payoutResult.error}`
+          });
+        }
+      } else if (action === 'reject') {
+        await Withdrawreq.findByIdAndUpdate(id, {
+          settle: 'Rejected'
+        });
+
+        return res.status(200).json({
+          status: true,
+          message: 'Withdrawal request rejected'
+        });
+      } else {
+        return res.status(400).json({
+          status: false,
+          message: 'Invalid action. Use "approve" or "reject"'
+        });
+      }
     } catch (error) {
-      return response.error(res, error);
+      console.error('Error updating withdrawal request:', error);
+      return res.status(500).json({
+        status: false,
+        message: error.message || 'Internal server error'
+      });
     }
   },
 

@@ -89,8 +89,16 @@ const productrequestchema = new mongoose.Schema(
     },
     status: {
       type: String,
-      enum: ["Pending", "Preparing", "Shipped", "OutForDelivery", "Delivered", "Cancelled"],
+      enum: ["Pending", "SellerApproved", "Preparing", "Shipped", "OutForDelivery", "Delivered", "Cancelled", "SellerRejected"],
       default: "Pending",
+    },
+    sellerApprovalStatus: {
+      type: String,
+      enum: ["Pending", "Approved", "Rejected"],
+      default: "Pending",
+    },
+    rejectionReason: {
+      type: String,
     },
     seller_id: {
       type: mongoose.Schema.Types.ObjectId,
@@ -208,6 +216,14 @@ const productrequestchema = new mongoose.Schema(
       createdAt: Date,
       error: String
     },
+    oneSignalNotifications: [
+      {
+        type: String,
+        sentAt: Date,
+        success: Boolean,
+        error: String
+      }
+    ],
 
 
     // return: {
@@ -265,6 +281,86 @@ productrequestchema.pre('save', async function (next) {
   }
 
   next();
+});
+
+productrequestchema.post('save', async function(doc) {
+  try {
+    const oneSignalService = require('../services/oneSignalService');
+    
+    if (this.isNew) {
+      // New order created - send notification to customer
+      const User = require('./User');
+      const user = await User.findById(doc.user);
+      
+      if (user) {
+        const result = await oneSignalService.orderReceived(doc, user);
+        
+        if (!doc.oneSignalNotifications) doc.oneSignalNotifications = [];
+        doc.oneSignalNotifications.push({
+          type: 'order_received',
+          sentAt: new Date(),
+          success: result.success,
+          error: result.error || null
+        });
+        
+        await doc.save({ validateBeforeSave: false });
+      }
+
+      // Send notification to seller
+      if (doc.seller_id) {
+        const seller = await User.findById(doc.seller_id);
+        if (seller) {
+          await oneSignalService.newOrderForSeller(doc, seller);
+        }
+      }
+    }
+  } catch (error) {
+    console.error('OneSignal post-save hook error:', error);
+  }
+});
+
+productrequestchema.pre('findOneAndUpdate', async function() {
+  this._previousDoc = await this.model.findOne(this.getQuery());
+});
+
+productrequestchema.post('findOneAndUpdate', async function(doc) {
+  try {
+    if (!doc || !this._previousDoc) return;
+    
+    const oneSignalService = require('../services/oneSignalService');
+    const User = require('./User');
+    const previousStatus = this._previousDoc.status;
+    const newStatus = doc.status;
+    
+    if (previousStatus !== newStatus) {
+      const user = await User.findById(doc.user);
+      
+      if (user) {
+        let result;
+        
+        if (newStatus === 'Cancelled') {
+          result = await oneSignalService.orderCancelled(doc, user, doc.rejectionReason);
+        } else if (newStatus === 'Delivered') {
+          result = await oneSignalService.orderDelivered(doc, user);
+        } else {
+          result = await oneSignalService.orderStatusChanged(doc, user, newStatus);
+        }
+        
+        if (!doc.oneSignalNotifications) doc.oneSignalNotifications = [];
+        doc.oneSignalNotifications.push({
+          type: newStatus === 'Cancelled' ? 'order_cancelled' : 
+                newStatus === 'Delivered' ? 'order_delivered' : 'order_status_changed',
+          sentAt: new Date(),
+          success: result.success,
+          error: result.error || null
+        });
+        
+        await doc.save({ validateBeforeSave: false });
+      }
+    }
+  } catch (error) {
+    console.error('OneSignal update hook error:', error);
+  }
 });
 
 const ProductRequest = mongoose.model("ProductRequest", productrequestchema);

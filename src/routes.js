@@ -19,7 +19,7 @@ const aboutRoutes = require('@routes/aboutRoutes')
 const galleryRoutes = require('@routes/galleryRoutes')
 const paypalRoutes = require('@routes/paypalRoutes')
 const cartRoutes = require('@routes/cartRoutes')
-// const walletRoutes = require('@routes/walletRoutes')
+
 module.exports = (app) => {
   app.use('/api/auth', authRoutes);
   app.use('/api', blogsRoutes);
@@ -42,5 +42,4 @@ module.exports = (app) => {
   app.use('/api',galleryRoutes)
   app.use('/api',paypalRoutes)
   app.use('/api',cartRoutes)
-  // app.use('/api',walletRoutes)
 };

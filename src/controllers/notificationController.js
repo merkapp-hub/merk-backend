@@ -49,10 +49,8 @@ module.exports = {
     try {
       const { title, description, userIds } = req.body;
 
-      // Respond to frontend first
       response.success(res, "Emails are being sent");
 
-      // Then process in background
       process.nextTick(async () => {
         try {
           await mailNotification.sendNotification(userIds, title, description);
@@ -64,6 +62,72 @@ module.exports = {
     } catch (err) {
       console.log(err);
       return response.error(res, err);
+    }
+  },
+
+  getSellerNotifications: async (req, res) => {
+    try {
+      const userId = req.user.id;
+      const { page = 1, limit = 20 } = req.query;
+
+      const skip = (page - 1) * limit;
+
+      const notifications = await Notification.find({ 
+        for: { $in: [userId] } 
+      })
+        .populate("orderId", "orderId status total")
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(parseInt(limit));
+
+      const unreadCount = await Notification.countDocuments({
+        for: { $in: [userId] },
+        readBy: { $nin: [userId] }
+      });
+
+      return res.status(200).json({
+        status: true,
+        data: notifications,
+        unreadCount
+      });
+    } catch (error) {
+      console.error("Get notifications error:", error);
+      return res.status(500).json({
+        status: false,
+        message: error.message || "Failed to fetch notifications"
+      });
+    }
+  },
+
+  markNotificationRead: async (req, res) => {
+    try {
+      const { notificationId } = req.body;
+      const userId = req.user.id;
+
+      const notification = await Notification.findById(notificationId);
+
+      if (!notification) {
+        return res.status(404).json({
+          status: false,
+          message: "Notification not found"
+        });
+      }
+
+      if (!notification.readBy.includes(userId)) {
+        notification.readBy.push(userId);
+        await notification.save();
+      }
+
+      return res.status(200).json({
+        status: true,
+        message: "Notification marked as read"
+      });
+    } catch (error) {
+      console.error("Mark notification read error:", error);
+      return res.status(500).json({
+        status: false,
+        message: error.message || "Failed to mark notification as read"
+      });
     }
   },
 };

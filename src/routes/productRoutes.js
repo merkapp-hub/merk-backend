@@ -215,9 +215,15 @@ router.post("/assignOrder", authMiddleware(["seller"]), product.assignOrderToEmp
 router.post("/getOrderByEmployee", authMiddleware(["employee"]), product.getOrderByEmployee);
 router.post("/getOrderHistoryByEmployee", authMiddleware(["employee"]), product.getOrderHistoryByEmployee);
 router.post("/reminderSellerForReturn", authMiddleware(["admin"]), product.reminderSellerForReturn);
+router.post("/approveOrder", authMiddleware(["seller"]), product.approveOrder);
+router.post("/rejectOrder", authMiddleware(["seller"]), product.rejectOrder);
+router.get("/getSellerPendingOrders", authMiddleware(["seller"]), product.getSellerPendingOrders);
 
-// Delivery label routes
 router.post("/generate-delivery-label", authMiddleware(["admin", "seller"]), product.generateDeliveryLabel);
 router.get("/:productId/delivery-label/print", authMiddleware(["admin", "seller"]), product.printDeliveryLabel);
+
+// OneSignal Push Notification Routes
+router.post("/notifications/send", authMiddleware(["admin", "seller"]), product.sendNotification);
+router.get("/notifications/history/:orderId", authMiddleware(["admin", "seller", "user"]), product.getNotificationHistory);
 
 module.exports = router;

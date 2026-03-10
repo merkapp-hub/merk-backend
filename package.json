@@ -29,6 +29,8 @@
   "dependencies": {
     "@onesignal/node-onesignal": "^5.1.0-beta1",
     "@paypal/checkout-server-sdk": "^1.0.3",
+    "@paypal/payouts-sdk": "^1.1.1",
+    "axios": "^1.13.6",
     "bcryptjs": "^3.0.2",
     "cloudinary": "^2.6.1",
     "config": "^4.0.0",

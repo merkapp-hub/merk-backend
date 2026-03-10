@@ -1,6 +1,7 @@
 const checkoutNodeJssdk = require('@paypal/checkout-server-sdk');
 const { client } = require('@config/paypal');
 const Product = require('@models/Product');
+const oneSignalService = require('../services/oneSignalService');
 
 // Create PayPal Order
 exports.createOrder = async (req, res) => {
@@ -388,6 +389,17 @@ exports.processCardPayment = async (req, res) => {
     });
 
     await newOrder.save();
+
+    // Send OneSignal notification for new order
+    try {
+      const User = require('@models/User');
+      const user = await User.findById(req.user.id);
+      if (user) {
+        await oneSignalService.orderReceived(newOrder, user);
+      }
+    } catch (notificationError) {
+      console.error('OneSignal notification error:', notificationError);
+    }
 
     res.json({
       status: true,

@@ -27,6 +27,16 @@ const withdrawreqSchema = new mongoose.Schema(
     },
     referenceId: {
       type: String
+    },
+    paypalBatchId: {
+      type: String
+    },
+    paypalStatus: {
+      type: String
+    },
+    paymentMethod: {
+      type: String,
+      default: 'PayPal'
     }
   },
   {
