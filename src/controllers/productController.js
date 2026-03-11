@@ -1957,25 +1957,34 @@ createProductRequest: async (req, res) => {
     }
   },
 
+
+ 
   getOrderBySeller: async (req, res) => {
     try {
       let cond = {};
       const { curDate } = req.body;
 
-      if (req.user.type === "SELLER") {
+      console.log("=== DEBUG getOrderBySeller ===");
+      console.log("req.user:", req.user);
+      console.log("req.body:", req.body);
+
+      if (req.user.type === "SELLER" || req.user.role === "seller") {
         cond = {
-          seller_id: req.user.id,
+          seller_id: new mongoose.Types.ObjectId(req.user.id || req.user._id),
           assignedEmployee: { $exists: false },
-          // status: { $in: ["Pending", "Packed"] }
           status: { $in: ["Pending", "Packed"] },
         };
+        console.log("SELLER condition:", cond);
       }
 
-      if (req.user.type === "ADMIN") {
+      if (req.user.type === "ADMIN" || req.user.role === "admin") {
         if (req.body.seller_id) {
           cond = {
-            seller_id: req.body.seller_id,
+            seller_id: new mongoose.Types.ObjectId(req.body.seller_id),
           };
+          console.log("ADMIN condition:", cond);
+        } else {
+          console.log("ADMIN but no seller_id in body");
         }
       }
 
@@ -2001,12 +2010,17 @@ createProductRequest: async (req, res) => {
       let limit = parseInt(req.query.limit) || 10;
       let skip = (page - 1) * limit;
 
+      console.log("Final query condition:", JSON.stringify(cond, null, 2));
+
       const product = await ProductRequest.find(cond)
         .populate("user", "-password -varients")
         .populate("productDetail.product")
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit);
+
+      console.log("Found orders count:", product.length);
+      console.log("Sample order seller_ids:", product.slice(0, 3).map(p => ({ orderId: p._id, seller_id: p.seller_id })));
 
       const indexedProducts = product.map((item, index) => ({
         ...(item.toObject?.() || item),
@@ -2015,6 +2029,8 @@ createProductRequest: async (req, res) => {
 
       const totalBlogs = await ProductRequest.countDocuments(cond);
       const totalPages = Math.ceil(totalBlogs / limit);
+
+      console.log("Total orders matching condition:", totalBlogs);
 
       return res.status(200).json({
         status: true,
@@ -2030,6 +2046,7 @@ createProductRequest: async (req, res) => {
       return response.error(res, error);
     }
   },
+
 
   getSellerOrderByAdmin: async (req, res) => {
     try {
