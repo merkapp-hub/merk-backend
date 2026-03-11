@@ -28,6 +28,7 @@ router.get("/getcolors", product.getColors);
 
 router.get("/topselling", product.topselling);
 router.get("/getnewitem", product.getnewitem);
+router.post("/test-notification", authMiddleware(["user", "admin", "seller"]), product.testNotification);
 router.delete("/deleteProduct/:id", authMiddleware(["user", "admin", "seller"]), product.deleteProduct);
 router.post("/deleteAllProduct", authMiddleware(["user", "admin", "seller"]), product.deleteAllProduct);
 

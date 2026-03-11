@@ -1365,6 +1365,7 @@ createProductRequest: async (req, res) => {
                 
                 savedOrders.push(savedOrder);
 
+                // Send notification to seller
                 const Notification = require("@models/Notification");
                 try {
                     const notification = new Notification({
@@ -1387,6 +1388,19 @@ createProductRequest: async (req, res) => {
                     }
                 } catch (notifError) {
                     console.error("⚠️ Error sending seller notification:", notifError);
+                }
+
+                // Send notification to customer
+                try {
+                    const oneSignalService = require('../services/oneSignalService');
+                    const customer = await User.findById(req.user.id);
+                    
+                    if (customer) {
+                        await oneSignalService.orderReceived(savedOrder, customer);
+                        console.log("📱 Order notification sent to customer:", customer._id);
+                    }
+                } catch (customerNotifError) {
+                    console.error("⚠️ Error sending customer notification:", customerNotifError);
                 }
 
                 for (const productItem of sellerOrders[sellerId].productDetail) {
@@ -1957,16 +1971,10 @@ createProductRequest: async (req, res) => {
     }
   },
 
-
- 
   getOrderBySeller: async (req, res) => {
     try {
       let cond = {};
       const { curDate } = req.body;
-
-      console.log("=== DEBUG getOrderBySeller ===");
-      console.log("req.user:", req.user);
-      console.log("req.body:", req.body);
 
       if (req.user.type === "SELLER" || req.user.role === "seller") {
         cond = {
@@ -1974,7 +1982,6 @@ createProductRequest: async (req, res) => {
           assignedEmployee: { $exists: false },
           status: { $in: ["Pending", "Packed"] },
         };
-        console.log("SELLER condition:", cond);
       }
 
       if (req.user.type === "ADMIN" || req.user.role === "admin") {
@@ -1982,9 +1989,6 @@ createProductRequest: async (req, res) => {
           cond = {
             seller_id: new mongoose.Types.ObjectId(req.body.seller_id),
           };
-          console.log("ADMIN condition:", cond);
-        } else {
-          console.log("ADMIN but no seller_id in body");
         }
       }
 
@@ -2010,17 +2014,12 @@ createProductRequest: async (req, res) => {
       let limit = parseInt(req.query.limit) || 10;
       let skip = (page - 1) * limit;
 
-      console.log("Final query condition:", JSON.stringify(cond, null, 2));
-
       const product = await ProductRequest.find(cond)
         .populate("user", "-password -varients")
         .populate("productDetail.product")
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit);
-
-      console.log("Found orders count:", product.length);
-      console.log("Sample order seller_ids:", product.slice(0, 3).map(p => ({ orderId: p._id, seller_id: p.seller_id })));
 
       const indexedProducts = product.map((item, index) => ({
         ...(item.toObject?.() || item),
@@ -2029,8 +2028,6 @@ createProductRequest: async (req, res) => {
 
       const totalBlogs = await ProductRequest.countDocuments(cond);
       const totalPages = Math.ceil(totalBlogs / limit);
-
-      console.log("Total orders matching condition:", totalBlogs);
 
       return res.status(200).json({
         status: true,
@@ -2046,7 +2043,6 @@ createProductRequest: async (req, res) => {
       return response.error(res, error);
     }
   },
-
 
   getSellerOrderByAdmin: async (req, res) => {
     try {
@@ -2386,12 +2382,14 @@ getSellerProductByAdmin: async (req, res) => {
         orderDeliveredMail 
       } = require('../services/mailNotification');
       
-      // Send emails based on status change
+      // Send emails and notifications based on status change
       if (product.user && product.user.email) {
         const customerName = product.user.firstName || 'Customer';
         const orderId = product.orderId || product._id;
         
         try {
+          const oneSignalService = require('../services/oneSignalService');
+          
           switch (req.body.status) {
             case "Preparing":
               await orderPreparingMail({
@@ -2400,7 +2398,9 @@ getSellerProductByAdmin: async (req, res) => {
                 orderId: orderId,
                 estimatedTime: '1-2 business days'
               });
-              console.log("📧 Order preparing email sent");
+              
+              await oneSignalService.orderStatusUpdate(product, product.user, "📦 Preparing Order", "Your order is being prepared for shipment");
+              console.log("📧 Order preparing email and notification sent");
               break;
               
             case "Shipped":
@@ -2411,7 +2411,9 @@ getSellerProductByAdmin: async (req, res) => {
                 trackingNumber: req.body.trackingNumber || 'N/A',
                 estimatedDelivery: '2-3 business days'
               });
-              console.log("📧 Order shipped email sent");
+              
+              await oneSignalService.orderStatusUpdate(product, product.user, "🚚 Shipped", "Your order has been shipped and is on its way");
+              console.log("📧 Order shipped email and notification sent");
               break;
               
             case "OutForDelivery":
@@ -2421,7 +2423,9 @@ getSellerProductByAdmin: async (req, res) => {
                 orderId: orderId,
                 deliveryTime: 'today'
               });
-              console.log("📧 Out for delivery email sent");
+              
+              await oneSignalService.orderStatusUpdate(product, product.user, "🚴 Out for Delivery", "Your order is out for delivery and will arrive soon");
+              console.log("📧 Out for delivery email and notification sent");
               break;
               
             case "Delivered":
@@ -2439,7 +2443,9 @@ getSellerProductByAdmin: async (req, res) => {
                 }),
                 proofImage: req.body.proofImage || null
               });
-              console.log("📧 Order delivered email sent");
+              
+              await oneSignalService.orderDelivered(product, product.user);
+              console.log("📧 Order delivered email and notification sent");
               
               await notify(
                 product.user._id,
@@ -2447,10 +2453,14 @@ getSellerProductByAdmin: async (req, res) => {
                 "Tu pedido ha sido entregado exitosamente"
               );
               break;
+              
+            case "Cancelled":
+              await oneSignalService.orderCancelled(product, product.user, req.body.reason);
+              console.log("📱 Order cancelled notification sent");
+              break;
           }
         } catch (emailError) {
-          console.error("⚠️ Error sending status update email:", emailError);
-          // Don't fail the status update if email fails
+          console.error("⚠️ Error sending status update email/notification:", emailError);
         }
       }
       
@@ -3758,6 +3768,68 @@ getNotificationHistory: async (req, res) => {
 
   } catch (error) {
     return response.error(res, error);
+  }
+},
+
+testNotification: async (req, res) => {
+  try {
+    console.log('🧪 Test notification API called');
+    console.log('👤 User:', req.user);
+    console.log('📦 Request body:', req.body);
+    
+    const { userId, title, message } = req.body;
+    
+    if (!userId || !title || !message) {
+      return res.status(400).json({
+        success: false,
+        message: 'Missing required fields: userId, title, message'
+      });
+    }
+    
+    // Get user from database
+    const User = require('@models/User');
+    const user = await User.findById(userId);
+    
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+    
+    // Send test notification using OneSignal service
+    const oneSignalService = require('../services/oneSignalService');
+    
+    const result = await oneSignalService.sendNotification(
+      [userId],
+      title,
+      message,
+      { type: 'test', timestamp: new Date().toISOString() }
+    );
+    
+    console.log('📱 Test notification result:', result);
+    
+    if (result.success) {
+      return res.status(200).json({
+        success: true,
+        message: 'Test notification sent successfully!',
+        data: result.data
+      });
+    } else {
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to send test notification',
+        error: result.error
+      });
+    }
+    
+  } catch (error) {
+    console.error('❌ Test notification error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Internal server error',
+      error: error.message
+    });
   }
 }
 
