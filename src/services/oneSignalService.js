@@ -3,25 +3,39 @@ const https = require('https');
 class OneSignalService {
   constructor() {
     this.appId = process.env.ONESIGNAL_APP_ID;
+    this.restApiKey = process.env.ONESIGNAL_REST_API_KEY;
     this.apiUrl = 'https://onesignal.com/api/v1/notifications';
   }
 
   async sendNotification(userIds, title, message, data = {}) {
     try {
       if (!this.appId) {
-        console.error('OneSignal App ID not configured');
+        console.error('❌ OneSignal App ID not configured');
         return { success: false, error: 'App ID not configured' };
       }
 
+      if (!this.restApiKey) {
+        console.error('❌ OneSignal REST API Key not configured');
+        return { success: false, error: 'REST API Key not configured' };
+      }
+
+      // Convert single userIds to array
+      const userIdArray = Array.isArray(userIds) ? userIds : [userIds];
+      
+      console.log('🔍 Sending notification to users:', userIdArray);
+      console.log('📱 Title:', title);
+      console.log('💬 Message:', message);
+
       const payload = {
         app_id: this.appId,
-        include_external_user_ids: Array.isArray(userIds) ? userIds : [userIds],
+        include_external_user_ids: userIdArray,
         headings: { en: title },
         contents: { en: message },
         data: data
       };
 
       const postData = JSON.stringify(payload);
+      console.log('📦 OneSignal payload:', payload);
 
       const options = {
         hostname: 'onesignal.com',
@@ -30,6 +44,7 @@ class OneSignalService {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Basic ${this.restApiKey}`,
           'Content-Length': Buffer.byteLength(postData)
         },
         timeout: 10000
@@ -44,25 +59,34 @@ class OneSignalService {
           });
 
           res.on('end', () => {
+            console.log('📡 OneSignal response status:', res.statusCode);
+            console.log('📋 OneSignal response data:', responseData);
+            
             try {
               const parsedData = JSON.parse(responseData);
-              console.log(`OneSignal notification sent to users: ${userIds}`);
-              resolve({ success: true, data: parsedData });
+              
+              if (res.statusCode === 200 && parsedData.id) {
+                console.log(`✅ OneSignal notification sent successfully to users: ${userIdArray}`);
+                resolve({ success: true, data: parsedData });
+              } else {
+                console.error('❌ OneSignal API error:', parsedData);
+                resolve({ success: false, error: parsedData.errors || 'Unknown error' });
+              }
             } catch (parseError) {
-              console.error('OneSignal response parse error:', parseError);
+              console.error('❌ OneSignal response parse error:', parseError);
               resolve({ success: false, error: 'Invalid response format' });
             }
           });
         });
 
         req.on('error', (error) => {
-          console.error('OneSignal API Error:', error.message);
+          console.error('❌ OneSignal API Error:', error.message);
           resolve({ success: false, error: error.message });
         });
 
         req.on('timeout', () => {
           req.destroy();
-          console.error('OneSignal API timeout');
+          console.error('❌ OneSignal API timeout');
           resolve({ success: false, error: 'Request timeout' });
         });
 
@@ -71,7 +95,7 @@ class OneSignalService {
       });
 
     } catch (error) {
-      console.error('OneSignal API Error:', error.message);
+      console.error('❌ OneSignal API Error:', error.message);
       return { success: false, error: error.message };
     }
   }
