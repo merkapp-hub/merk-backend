@@ -2132,6 +2132,8 @@ createProductRequest: async (req, res) => {
   },
   getSellerReturnOrderByAdmin: async (req, res) => {
     try {
+      console.log('🔍 getSellerReturnOrderByAdmin called with:', req.body);
+      
       let cond = {};
       const { curDate, curentDate, sellerName, customerName } = req.body;
 
@@ -2185,60 +2187,111 @@ createProductRequest: async (req, res) => {
         }
       }
 
-      cond.productDetail = {
-        $elemMatch: {
-          returnDetails: { $exists: true },
-          $or: [
-            { "returnDetails.isReturned": true },
-            { "returnDetails.isRefunded": true },
-          ],
+      // Check for both returnDetails and status-based returns
+      cond.$or = [
+        {
+          productDetail: {
+            $elemMatch: {
+              returnDetails: { $exists: true },
+              $or: [
+                { "returnDetails.isReturned": true },
+                { "returnDetails.isRefunded": true },
+              ],
+            },
+          }
         },
-      };
+        {
+          status: { $in: ['Return Requested', 'Cancelled'] }
+        }
+      ];
+
+      console.log('🔍 Search conditions:', JSON.stringify(cond, null, 2));
 
       const page = parseInt(req.query.page) || 1;
       const limit = parseInt(req.query.limit) || 10;
       const skip = (page - 1) * limit;
 
       const orders = await ProductRequest.find(cond)
-        .populate("user", "-password -varients")
+        .select('+returnReason +returnRequestDate +returndate') // Explicitly include return fields
+        .populate("user", "username firstName lastName email")
         .populate("productDetail.product")
-        .populate("seller_id", "-password")
+        .populate("seller_id", "username firstName lastName email")
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit);
+
+      console.log('🔍 Found orders:', orders.length);
+      
+      // Debug first order to see populated data
+      if (orders.length > 0) {
+        console.log('🔍 First order sample:', {
+          orderId: orders[0].orderId,
+          user: orders[0].user,
+          seller_id: orders[0].seller_id,
+          status: orders[0].status
+        });
+      }
 
       const filteredOrders = orders
         .map((order, index) => {
           const orderObj = order.toObject?.() || order;
 
+          // Check if order has returnDetails in productDetail
           const returnedItems =
             orderObj.productDetail?.filter(
               (item) => item.returnDetails?.isReturned === true
             ) || [];
 
-          // const refundedItems =
-          // orderObj.productDetail?.filter(
-          //   (item) => item.returnDetails?.isRefunded === true
-          // ) || [];
+          // Also check if order status indicates return
+          const hasReturnStatus = ['Return Requested', 'Cancelled'].includes(orderObj.status);
 
-          // if (returnedItems.length > 0 || refundedItems.length > 0) {
-          //   return {
-          //     ...orderObj,
-          //     indexNo: skip + index + 1,
-          //     productDetail: returnedItems.concat(refundedItems),
-          //   };
-          // }
-          if (returnedItems.length > 0) {
-            return {
+          console.log('🔍 Order processing:', {
+            orderId: orderObj.orderId || orderObj._id,
+            status: orderObj.status,
+            hasReturnStatus,
+            returnedItemsCount: returnedItems.length,
+            returndate: orderObj.returndate,
+            returnRequestDate: orderObj.returnRequestDate,
+            user: orderObj.user,
+            seller: orderObj.seller_id
+          });
+
+          if (returnedItems.length > 0 || hasReturnStatus) {
+            // Add username fields for admin panel compatibility
+            const processedOrder = {
               ...orderObj,
               indexNo: skip + index + 1,
-              productDetail: returnedItems,
+              productDetail: returnedItems.length > 0 ? returnedItems : orderObj.productDetail,
+              // Ensure returndate is available for admin panel
+              returndate: orderObj.returndate || orderObj.returnRequestDate || orderObj.createdAt
             };
+
+            // Add username fields if user data exists
+            if (processedOrder.user) {
+              processedOrder.user.username = `${processedOrder.user.firstName || ''} ${processedOrder.user.lastName || ''}`.trim() || processedOrder.user.email;
+            }
+            
+            if (processedOrder.seller_id) {
+              processedOrder.seller_id.username = `${processedOrder.seller_id.firstName || ''} ${processedOrder.seller_id.lastName || ''}`.trim() || processedOrder.seller_id.email;
+            }
+
+            // Debug return details
+            console.log('🔍 Product details for order:', processedOrder.orderId, {
+              productCount: processedOrder.productDetail?.length,
+              firstProductReturnDetails: processedOrder.productDetail?.[0]?.returnDetails,
+              orderReturnReason: processedOrder.returnReason,
+              orderReturnRequestDate: processedOrder.returnRequestDate,
+              orderReturnDate: processedOrder.returndate
+            });
+
+            return processedOrder;
           }
 
           return null;
         })
         .filter(Boolean);
+
+      console.log('🔍 Filtered orders:', filteredOrders.length);
 
       const totalOrders = await ProductRequest.countDocuments(cond);
       const totalPages = Math.ceil(totalOrders / limit);
@@ -3830,6 +3883,456 @@ testNotification: async (req, res) => {
       message: 'Internal server error',
       error: error.message
     });
+  }
+},
+
+// Test function to create a delivered order for testing return functionality
+createTestDeliveredOrder: async (req, res) => {
+  try {
+    if (!req.user || req.user.role !== 'admin') {
+      return response.error(res, { message: "Admin access required" });
+    }
+
+    // Find a user and a product for testing
+    const user = await User.findOne({ role: 'user' }).limit(1);
+    const product = await Product.findOne({ is_verified: true }).limit(1);
+
+    if (!user || !product) {
+      return response.error(res, { message: "Need at least one user and one product to create test order" });
+    }
+
+    const testOrder = new ProductRequest({
+      user: user._id,
+      seller_id: product.userid,
+      status: "Delivered",
+      orderId: `TEST-${Date.now()}`,
+      productDetail: [{
+        product: product._id,
+        image: product.images || ['https://via.placeholder.com/150'],
+        qty: 1,
+        price: product.price_slot?.[0]?.our_price || 100,
+        price_slot: product.price_slot || [{ price: 100, our_price: 100 }],
+        isReturnable: true
+      }],
+      shipping_address: {
+        name: user.firstName || 'Test User',
+        address: '123 Test Street',
+        city: 'Test City',
+        phone: '1234567890'
+      },
+      total: product.price_slot?.[0]?.our_price || 100,
+      paymentmode: 'test',
+      createdAt: new Date(),
+      updatedAt: new Date()
+    });
+
+    const savedOrder = await testOrder.save();
+    
+    return response.success(res, {
+      message: "Test delivered order created successfully",
+      order: savedOrder,
+      instructions: "You can now test return functionality with this order"
+    });
+
+  } catch (error) {
+    console.error('Error creating test order:', error);
+    return response.error(res, error);
+  }
+},
+
+// Send notification to seller about return request
+sendReturnNotificationToSeller: async (req, res) => {
+  try {
+    const { orderId } = req.body;
+
+    if (!orderId) {
+      return response.error(res, { message: "Order ID is required" });
+    }
+
+    // Find the order
+    const order = await ProductRequest.findById(orderId)
+      .populate('user', 'firstName lastName email')
+      .populate('seller_id', 'firstName lastName email');
+
+    if (!order) {
+      return response.error(res, { message: "Order not found" });
+    }
+
+    if (!order.seller_id) {
+      return response.error(res, { message: "Seller not found for this order" });
+    }
+
+    // Send notification to seller
+    const sellerName = `${order.seller_id.firstName || ''} ${order.seller_id.lastName || ''}`.trim() || order.seller_id.email;
+    const customerName = `${order.user.firstName || ''} ${order.user.lastName || ''}`.trim() || order.user.email;
+    
+    const notificationMessage = `Return request received for order ${order.orderId || order._id} from customer ${customerName}. Please review and take action.`;
+
+    try {
+      await oneSignalService.sendNotification(
+        [order.seller_id._id.toString()],
+        `Return Request - Order ${order.orderId || order._id}`,
+        notificationMessage,
+        {
+          orderId: order.orderId || order._id,
+          type: 'return_notification',
+          customerName: customerName
+        }
+      );
+
+      console.log(`📧 Return notification sent to seller: ${sellerName} for order: ${order.orderId}`);
+
+      return response.success(res, {
+        message: `Return notification sent successfully to seller ${sellerName}`,
+        orderId: order.orderId || order._id,
+        sellerName: sellerName
+      });
+
+    } catch (notifError) {
+      console.error('Error sending notification to seller:', notifError);
+      return response.error(res, { message: "Failed to send notification to seller" });
+    }
+
+  } catch (error) {
+    console.error('Error in sendReturnNotificationToSeller:', error);
+    return response.error(res, error);
+  }
+},
+
+// Update return order status (admin action)
+updateReturnOrderStatus: async (req, res) => {
+  try {
+    const { orderId, status } = req.body;
+
+    if (!orderId || !status) {
+      return response.error(res, { message: "Order ID and status are required" });
+    }
+
+    // Validate status
+    const validStatuses = ['Returned', 'Refunded', 'Return Rejected'];
+    if (!validStatuses.includes(status)) {
+      return response.error(res, { message: "Invalid status. Valid statuses: " + validStatuses.join(', ') });
+    }
+
+    // Find and update the order
+    const updatedOrder = await ProductRequest.findByIdAndUpdate(
+      orderId,
+      { 
+        status: status,
+        returnProcessedAt: new Date(),
+        returnProcessedBy: req.user.id
+      },
+      { new: true }
+    ).populate('user', 'firstName lastName email');
+
+    if (!updatedOrder) {
+      return response.error(res, { message: "Order not found" });
+    }
+
+    // Send notification to customer
+    const customerName = `${updatedOrder.user.firstName || ''} ${updatedOrder.user.lastName || ''}`.trim() || updatedOrder.user.email;
+    const notificationMessage = `Your return request for order ${updatedOrder.orderId || updatedOrder._id} has been processed. Status: ${status}`;
+
+    try {
+      await oneSignalService.sendNotification(
+        [updatedOrder.user._id.toString()],
+        `Return Status Update - ${status}`,
+        notificationMessage,
+        {
+          orderId: updatedOrder.orderId || updatedOrder._id,
+          type: 'return_status_update',
+          status: status
+        }
+      );
+
+      console.log(`📧 Return status notification sent to customer: ${customerName} for order: ${updatedOrder.orderId}`);
+    } catch (notifError) {
+      console.error('Error sending notification to customer:', notifError);
+    }
+
+    return response.success(res, {
+      message: `Order status updated to ${status} successfully`,
+      orderId: updatedOrder.orderId || updatedOrder._id,
+      status: status,
+      customerName: customerName
+    });
+
+  } catch (error) {
+    console.error('Error in updateReturnOrderStatus:', error);
+    return response.error(res, error);
+  }
+},
+
+// Update return status for individual products (admin/seller action)
+updateReturnStatus: async (req, res) => {
+  try {
+    const { orderId, productId, status } = req.body;
+
+    if (!orderId || !status) {
+      return response.error(res, { message: "Order ID and status are required" });
+    }
+
+    // Validate status
+    const validStatuses = ['Approved', 'Rejected', 'Refunded'];
+    if (!validStatuses.includes(status)) {
+      return response.error(res, { message: "Invalid status. Valid statuses: " + validStatuses.join(', ') });
+    }
+
+    // Find the order by orderId field (not _id)
+    const order = await ProductRequest.findOne({ 
+      $or: [
+        { orderId: orderId },
+        { _id: orderId.match(/^[0-9a-fA-F]{24}$/) ? orderId : null }
+      ]
+    }).populate('user', 'firstName lastName email');
+
+    if (!order) {
+      return response.error(res, { message: "Order not found" });
+    }
+
+    // Update the specific product's return status
+    let updated = false;
+    if (productId) {
+      // Update specific product
+      order.productDetail.forEach(product => {
+        if (product._id.toString() === productId) {
+          if (!product.returnDetails) {
+            product.returnDetails = {};
+          }
+          product.returnDetails.returnStatus = status;
+          product.returnDetails.processedAt = new Date();
+          product.returnDetails.processedBy = req.user.id;
+          
+          // If approved, mark as returned
+          if (status === 'Approved') {
+            product.returnDetails.isReturned = true;
+          }
+          // If refunded, mark as refunded
+          if (status === 'Refunded') {
+            product.returnDetails.isRefunded = true;
+            product.returnDetails.refundedAt = new Date();
+          }
+          
+          updated = true;
+        }
+      });
+    } else {
+      // Update all products in the order that have return requests
+      order.productDetail.forEach(product => {
+        if (product.returnDetails && product.returnDetails.returnStatus) {
+          product.returnDetails.returnStatus = status;
+          product.returnDetails.processedAt = new Date();
+          product.returnDetails.processedBy = req.user.id;
+          
+          // If approved, mark as returned
+          if (status === 'Approved') {
+            product.returnDetails.isReturned = true;
+          }
+          // If refunded, mark as refunded
+          if (status === 'Refunded') {
+            product.returnDetails.isRefunded = true;
+            product.returnDetails.refundedAt = new Date();
+          }
+          
+          updated = true;
+        }
+      });
+    }
+
+    if (!updated) {
+      return response.error(res, { message: "No return request found for the specified product" });
+    }
+
+    // Check if all products in the order have been approved for return
+    let allProductsReturned = true;
+    let anyProductRejected = false;
+    
+    order.productDetail.forEach(product => {
+      if (product.returnDetails && product.returnDetails.returnStatus) {
+        // Check if any product is rejected
+        if (product.returnDetails.returnStatus === 'Rejected') {
+          anyProductRejected = true;
+        }
+        // If any product is not approved/refunded, then order is not fully returned
+        if (!['Approved', 'Refunded'].includes(product.returnDetails.returnStatus)) {
+          allProductsReturned = false;
+        }
+      } else {
+        // If product doesn't have return request, it's not returned
+        allProductsReturned = false;
+      }
+    });
+
+    // Update main order status based on return decisions
+    if (allProductsReturned && status === 'Approved') {
+      order.status = 'Returned';
+    } else if (status === 'Rejected' || anyProductRejected) {
+      // If return is rejected, set status back to "Delivered" (assuming it was delivered before return request)
+      order.status = 'Delivered';
+    }
+
+    // Save the updated order (using markModified to ensure nested changes are saved)
+    order.markModified('productDetail');
+    await order.save({ validateBeforeSave: false });
+
+    // Send notification to customer
+    const customerName = `${order.user.firstName || ''} ${order.user.lastName || ''}`.trim() || order.user.email;
+    const notificationMessage = `Your return request for order ${order.orderId || order._id} has been ${status.toLowerCase()}`;
+
+    try {
+      await oneSignalService.sendNotification(
+        [order.user._id.toString()],
+        `Return Request ${status}`,
+        notificationMessage,
+        {
+          orderId: order.orderId || order._id,
+          type: 'return_status_update',
+          status: status
+        }
+      );
+
+      console.log(`📧 Return status notification sent to customer: ${customerName} for order: ${order.orderId}`);
+    } catch (notifError) {
+      console.error('Error sending notification to customer:', notifError);
+    }
+
+    return response.success(res, {
+      message: `Return request ${status.toLowerCase()} successfully`,
+      orderId: order.orderId || order._id,
+      status: status,
+      customerName: customerName
+    });
+
+  } catch (error) {
+    console.error('Error in updateReturnStatus:', error);
+    return response.error(res, error);
+  }
+},
+
+returnRequest: async (req, res) => {
+  try {
+    console.log('🔄 Return request received:', req.body);
+    
+    const { orderId, reason, type } = req.body;
+    const userId = req.user.id;
+
+    console.log('🔍 Processing return request:', {
+      orderId,
+      reason,
+      type,
+      userId
+    });
+
+    if (!orderId || !reason || !type) {
+      return response.error(res, { message: "Order ID, reason, and type are required" });
+    }
+
+    const order = await ProductRequest.findOne({
+      $or: [
+        { orderId: orderId },
+        { _id: mongoose.Types.ObjectId.isValid(orderId) ? orderId : null }
+      ],
+      user: userId
+    });
+
+    console.log('🔍 Found order:', order ? 'Yes' : 'No', order?._id);
+
+    if (!order) {
+      return response.error(res, { message: "Order not found" });
+    }
+
+    if (type === 'return' && order.status?.toLowerCase() !== 'delivered') {
+      return response.error(res, { message: "Only delivered orders can be returned" });
+    }
+
+    if (type === 'cancel' && order.status?.toLowerCase() === 'delivered') {
+      return response.error(res, { message: "Delivered orders cannot be cancelled" });
+    }
+
+    const newStatus = type === 'return' ? 'Return Requested' : 'Cancelled';
+    
+    // Update order status
+    const updateData = {
+      status: newStatus,
+      returnReason: reason,
+      returnRequestDate: new Date(),
+      returndate: new Date() // Add this for admin panel compatibility
+    };
+
+    // If it's a return request, also update productDetail with returnDetails
+    if (type === 'return') {
+      // Combine both updates in a single operation
+      const combinedUpdate = {
+        ...updateData,
+        // Update each product's returnDetails
+        ...order.productDetail.reduce((acc, product, index) => {
+          acc[`productDetail.${index}.returnDetails`] = {
+            returnStatus: "Return-requested",
+            isReturned: true,
+            returnRequestDate: new Date(),
+            reason: reason,
+            proofImages: []
+          };
+          return acc;
+        }, {})
+      };
+
+      const updatedOrder = await ProductRequest.findByIdAndUpdate(
+        order._id, 
+        { $set: combinedUpdate }, 
+        { new: true }
+      );
+      
+      console.log('🔄 Updated order with returnDetails for', order.productDetail.length, 'products');
+      console.log('🔍 Updated order returnReason:', updatedOrder.returnReason);
+    } else {
+      // For cancel requests, just update main fields
+      const updatedOrder = await ProductRequest.findByIdAndUpdate(
+        order._id, 
+        updateData, 
+        { new: true }
+      );
+    }
+    // Verify the update worked
+    const verifyOrder = await ProductRequest.findById(order._id);
+    console.log('🔍 Verification - Order after update:', {
+      orderId: verifyOrder.orderId,
+      status: verifyOrder.status,
+      returnReason: verifyOrder.returnReason,
+      returnRequestDate: verifyOrder.returnRequestDate,
+      returndate: verifyOrder.returndate,
+      productDetailCount: verifyOrder.productDetail?.length,
+      firstProductReturnDetails: verifyOrder.productDetail?.[0]?.returnDetails
+    });
+
+    const user = await User.findById(userId);
+    const notificationMessage = type === 'return' 
+      ? `Return request submitted for order ${order.orderId}`
+      : `Order ${order.orderId} has been cancelled`;
+
+    try {
+      await oneSignalService.sendNotification(
+        [userId],
+        notificationMessage,
+        {
+          orderId: order.orderId,
+          type: type,
+          reason: reason
+        }
+      );
+    } catch (notifError) {
+      console.error('Notification error:', notifError);
+    }
+
+    return response.success(res, {
+      message: type === 'return' ? "Return request submitted successfully" : "Order cancelled successfully",
+      orderId: order.orderId,
+      status: newStatus
+    });
+
+  } catch (error) {
+    console.error('Return/Cancel request error:', error);
+    return response.error(res, error);
   }
 }
 

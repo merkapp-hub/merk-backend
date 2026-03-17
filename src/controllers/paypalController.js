@@ -260,10 +260,17 @@ exports.processCardPayment = async (req, res) => {
       });
     }
 
-    if (!card || !card.number || !card.expiry || !card.cvv) {
+    if (!card || !card.number || !card.expiry || !card.cvv || !card.name) {
       return res.status(400).json({
         status: false,
-        message: 'Card details are required'
+        message: 'Complete card details are required (number, expiry, cvv, name)'
+      });
+    }
+
+    if (!shipping_address || !shipping_address.firstName || !shipping_address.address) {
+      return res.status(400).json({
+        status: false,
+        message: 'Complete shipping address is required'
       });
     }
 
@@ -285,10 +292,30 @@ exports.processCardPayment = async (req, res) => {
 
     // Parse expiry date
     const [expMonth, expYear] = card.expiry.split('/');
-    if (!expMonth || !expYear) {
+    if (!expMonth || !expYear || expMonth.length !== 2 || expYear.length !== 2) {
       return res.status(400).json({
         status: false,
         message: 'Invalid expiry date format. Use MM/YY'
+      });
+    }
+
+    // Validate expiry date
+    const currentYear = new Date().getFullYear() % 100;
+    const currentMonth = new Date().getMonth() + 1;
+    const cardYear = parseInt(expYear);
+    const cardMonth = parseInt(expMonth);
+
+    if (cardYear < currentYear || (cardYear === currentYear && cardMonth < currentMonth)) {
+      return res.status(400).json({
+        status: false,
+        message: 'Card has expired'
+      });
+    }
+
+    if (cardMonth < 1 || cardMonth > 12) {
+      return res.status(400).json({
+        status: false,
+        message: 'Invalid expiry month'
       });
     }
 
@@ -310,8 +337,35 @@ exports.processCardPayment = async (req, res) => {
     const shippingCost = Number(shipping) || 0;
     const taxAmount = Number(tax) || 0;
     
-    // Recalculate total to match breakdown
+    // Use the calculated total to ensure math is correct
     const calculatedTotal = itemTotal + shippingCost + taxAmount;
+    
+    // Fix floating point precision issues
+    const finalItemTotal = parseFloat(itemTotal.toFixed(2));
+    const finalShipping = parseFloat(shippingCost.toFixed(2));
+    const finalTax = parseFloat(taxAmount.toFixed(2));
+    const finalTotal = parseFloat(calculatedTotal.toFixed(2));
+
+    console.log('PayPal Order Calculation:', {
+      itemTotal: finalItemTotal,
+      shipping: finalShipping,
+      tax: finalTax,
+      calculatedTotal: finalTotal,
+      receivedTotal: Number(total)
+    });
+
+    // Determine country code based on shipping address
+    let countryCode = 'US'; // Default to US for PayPal compatibility
+    if (shipping_address.country) {
+      const countryMap = {
+        'Honduras': 'US', // Use US for PayPal compatibility
+        'Guatemala': 'US', 
+        'El Salvador': 'US',
+        'United States': 'US',
+        'USA': 'US'
+      };
+      countryCode = countryMap[shipping_address.country] || 'US';
+    }
 
     request.requestBody({
       intent: 'CAPTURE',
@@ -320,55 +374,69 @@ exports.processCardPayment = async (req, res) => {
           number: cardNumber,
           expiry: `20${expYear}-${expMonth.padStart(2, '0')}`,
           security_code: card.cvv,
-          name: card.name,
+          name: card.name || 'Card Holder',
           billing_address: {
-            address_line_1: shipping_address.address,
-            admin_area_2: shipping_address.city,
-            postal_code: shipping_address.pinCode,
-            country_code: 'US'
+            address_line_1: shipping_address.address || '123 Main St',
+            admin_area_2: shipping_address.city || 'New York',
+            admin_area_1: shipping_address.state || 'NY',
+            postal_code: shipping_address.pinCode || '10001',
+            country_code: countryCode
           }
         }
       },
       purchase_units: [{
         amount: {
           currency_code: 'USD',
-          value: calculatedTotal.toFixed(2), // Use calculated total
+          value: finalTotal.toFixed(2), // Use string format with 2 decimals
           breakdown: {
             item_total: {
               currency_code: 'USD',
-              value: itemTotal.toFixed(2)
+              value: finalItemTotal.toFixed(2)
             },
             shipping: {
               currency_code: 'USD',
-              value: shippingCost.toFixed(2)
+              value: finalShipping.toFixed(2)
             },
             tax_total: {
               currency_code: 'USD',
-              value: taxAmount.toFixed(2)
+              value: finalTax.toFixed(2)
             }
           }
         },
         description: 'Order from Merk Store',
         items: productDetail.map(item => ({
-          name: item.product?.name || item.name || 'Product',
+          name: (item.product?.name || item.name || 'Product').substring(0, 127), // PayPal limit
           unit_amount: {
             currency_code: 'USD',
-            value: Number(item.price).toFixed(2)
+            value: parseFloat(Number(item.price).toFixed(2)).toFixed(2) // Ensure proper format
           },
           quantity: String(item.qty || item.quantity || 1)
         })),
         shipping: {
           name: {
-            full_name: `${shipping_address.firstName} ${shipping_address.lastName}`.trim()
+            full_name: `${shipping_address.firstName || ''} ${shipping_address.lastName || ''}`.trim() || 'Customer'
           },
           address: {
-            address_line_1: shipping_address.address,
-            admin_area_2: shipping_address.city,
-            postal_code: shipping_address.pinCode,
-            country_code: 'US'
+            address_line_1: shipping_address.address || '123 Main St',
+            admin_area_2: shipping_address.city || 'New York',
+            admin_area_1: shipping_address.state || 'NY',
+            postal_code: shipping_address.pinCode || '10001',
+            country_code: countryCode
           }
         }
       }]
+    });
+
+    console.log('PayPal Card Payment Request Data:', {
+      cardNumber: cardNumber.substring(0, 4) + '****',
+      expiry: `20${expYear}-${expMonth.padStart(2, '0')}`,
+      cvv: '***',
+      name: card.name,
+      countryCode,
+      finalTotal,
+      finalItemTotal,
+      finalShipping,
+      finalTax
     });
 
     const order = await client().execute(request);
@@ -378,9 +446,9 @@ exports.processCardPayment = async (req, res) => {
       user: req.user.id,
       productDetail: productDetail,
       shipping_address: shipping_address,
-      total: total,
-      tax: taxAmount,
-      deliveryCharge: shippingCost,
+      total: finalTotal, // Use calculated total
+      tax: finalTax,
+      deliveryCharge: finalShipping,
       paymentmode: 'card',
       status: 'Pending',
       orderId: `ORD-${Date.now()}`,
@@ -410,22 +478,41 @@ exports.processCardPayment = async (req, res) => {
     });
 
   } catch (error) {
-    let errorMessage = 'Failed to process card payment';
+    console.error('PayPal Card Payment Error:', error);
     
-    if (error.message.includes('INVALID_CARD_NUMBER')) {
-      errorMessage = 'Invalid card number';
-    } else if (error.message.includes('CARD_EXPIRED')) {
-      errorMessage = 'Card has expired';
-    } else if (error.message.includes('INSUFFICIENT_FUNDS')) {
-      errorMessage = 'Insufficient funds';
-    } else if (error.message.includes('CARD_DECLINED')) {
-      errorMessage = 'Card was declined';
+    let errorMessage = 'Failed to process card payment';
+    let statusCode = 500;
+    
+    // Handle PayPal specific errors
+    if (error.statusCode) {
+      statusCode = error.statusCode;
+      
+      if (error.message.includes('INVALID_CARD_NUMBER')) {
+        errorMessage = 'Invalid card number';
+        statusCode = 400;
+      } else if (error.message.includes('CARD_EXPIRED')) {
+        errorMessage = 'Card has expired';
+        statusCode = 400;
+      } else if (error.message.includes('INSUFFICIENT_FUNDS')) {
+        errorMessage = 'Insufficient funds';
+        statusCode = 400;
+      } else if (error.message.includes('CARD_DECLINED')) {
+        errorMessage = 'Card was declined';
+        statusCode = 400;
+      } else if (error.message.includes('UNPROCESSABLE_ENTITY')) {
+        errorMessage = 'Invalid payment information. Please check your card details and address.';
+        statusCode = 400;
+      } else if (error.message.includes('INVALID_REQUEST')) {
+        errorMessage = 'Invalid payment request. Please try again.';
+        statusCode = 400;
+      }
     }
 
-    res.status(500).json({
+    res.status(statusCode).json({
       status: false,
       message: errorMessage,
-      error: error.message
+      error: error.message,
+      debug: process.env.NODE_ENV === 'development' ? error.stack : undefined
     });
   }
 };

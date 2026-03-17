@@ -62,6 +62,11 @@ router.post("/acceptorderdriver/:id", authMiddleware(["user", "admin", "seller",
 router.get("/orderhistoryfordriver", authMiddleware(["user", "admin", "seller", "driver"]), product.orderhistoryfordriver);
 router.get("/orderhistoryforvendor", authMiddleware(["user", "admin", "seller", "driver"]), product.orderhistoryforvendor);
 router.get("/getProductRequestbyUser", authMiddleware(["user", "admin", "seller", "employee"]), product.getrequestProductbyuser);
+router.post("/order/return-request", authMiddleware(["user"]), product.returnRequest);
+router.post("/order/cancel-request", authMiddleware(["user"]), product.returnRequest);
+router.post("/send-return-notification-to-seller", authMiddleware(["admin"]), product.sendReturnNotificationToSeller);
+router.post("/update-return-order-status", authMiddleware(["admin"]), product.updateReturnOrderStatus);
+router.post("/create-test-delivered-order", authMiddleware(["admin"]), product.createTestDeliveredOrder);
 router.get("/generateInvoice/:orderId", authMiddleware(["user", "admin", "seller", "employee"]), product.generateInvoice);
 router.get("/getAlluploadproduct", product.uploadProducts);
 router.post("/suspend/:id", authMiddleware(["user", "admin", "seller"]), product.suspendProduct);
@@ -216,6 +221,7 @@ router.post("/assignOrder", authMiddleware(["seller"]), product.assignOrderToEmp
 router.post("/getOrderByEmployee", authMiddleware(["employee"]), product.getOrderByEmployee);
 router.post("/getOrderHistoryByEmployee", authMiddleware(["employee"]), product.getOrderHistoryByEmployee);
 router.post("/reminderSellerForReturn", authMiddleware(["admin"]), product.reminderSellerForReturn);
+router.post("/update-return-status", authMiddleware(["admin", "seller"]), product.updateReturnStatus);
 router.post("/approveOrder", authMiddleware(["seller"]), product.approveOrder);
 router.post("/rejectOrder", authMiddleware(["seller"]), product.rejectOrder);
 router.get("/getSellerPendingOrders", authMiddleware(["seller"]), product.getSellerPendingOrders);
