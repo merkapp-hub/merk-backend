@@ -59,8 +59,8 @@ const cardSchema = new mongoose.Schema({
   }
 }, {
   timestamps: true,
-  toJSON: { getters: false },
-  toObject: { getters: false }
+  toJSON: { getters: true },
+  toObject: { getters: true }
 });
 
 // const ENCRYPTION_KEY = process.env.CARD_ENCRYPTION_KEY;
