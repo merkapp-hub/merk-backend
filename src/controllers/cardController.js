@@ -5,12 +5,12 @@ const cardController = {
   getCards: async (req, res) => {
     try {
       const userId = req.user._id;
-      
+
       const cards = await Card.find({ userId })
         .sort({ isDefault: -1, createdAt: -1 });
-      
+
       const safeCards = cards.map(card => card.toSafeObject());
-      
+
       return response.success(res, safeCards);
     } catch (error) {
       console.error('Error fetching cards:', error);
@@ -35,8 +35,8 @@ const cardController = {
         return response.badReq(res, { message: 'Required fields are missing' });
       }
 
-      const cleanCardNumber = cardNumber.replace(/\s+/g, '');
-      
+      const cleanCardNumber = cardNumber.toString().replace(/\s+/g, '');
+
       if (cleanCardNumber.length < 13 || cleanCardNumber.length > 19) {
         return response.badReq(res, { message: 'Invalid card number' });
       }
@@ -188,21 +188,21 @@ const cardController = {
 function isValidCardNumber(cardNumber) {
   let sum = 0;
   let shouldDouble = false;
-  
+
   for (let i = cardNumber.length - 1; i >= 0; i--) {
     let digit = parseInt(cardNumber.charAt(i));
-    
+
     if (shouldDouble) {
       digit *= 2;
       if (digit > 9) {
         digit -= 9;
       }
     }
-    
+
     sum += digit;
     shouldDouble = !shouldDouble;
   }
-  
+
   return (sum % 10) === 0;
 }
 
@@ -213,13 +213,13 @@ function getCardType(cardNumber) {
     'American Express': /^3[47]/,
     'Discover': /^6/
   };
-  
+
   for (const [type, pattern] of Object.entries(patterns)) {
     if (pattern.test(cardNumber)) {
       return type;
     }
   }
-  
+
   return 'Card';
 }
 

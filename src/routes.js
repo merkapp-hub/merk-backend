@@ -24,6 +24,9 @@ const cardRoutes = require('@routes/cardRoutes')
 const userRoutes = require('@routes/userRoutes')
 
 module.exports = (app) => {
+  app.get("/", (req, res) => {
+    res.send("API running");
+  });
   app.use('/api/auth', authRoutes);
   app.use('/api', blogsRoutes);
   app.use('/api', categoryRoutes);
@@ -38,14 +41,14 @@ module.exports = (app) => {
   app.use('/api', themeRoutes);
   app.use('/api', timeRoutes);
   app.use('/api', withdrawreqRoutes);
-  app.use('/api',contactRoutes)
-  app.use('/api',reviewRoutes)
-  app.use('/api',saleRoutes)
-  app.use('/api',aboutRoutes)
-  app.use('/api',galleryRoutes)
-  app.use('/api',paypalRoutes)
-  app.use('/api',cartRoutes)
-  app.use('/api',addressRoutes)
-  app.use('/api',cardRoutes)
-  app.use('/api',userRoutes)
+  app.use('/api', contactRoutes)
+  app.use('/api', reviewRoutes)
+  app.use('/api', saleRoutes)
+  app.use('/api', aboutRoutes)
+  app.use('/api', galleryRoutes)
+  app.use('/api', paypalRoutes)
+  app.use('/api', cartRoutes)
+  app.use('/api', addressRoutes)
+  app.use('/api', cardRoutes)
+  app.use('/api', userRoutes)
 };
