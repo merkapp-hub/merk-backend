@@ -31,7 +31,6 @@ const cardController = {
         isDefault
       } = req.body;
 
-      console.log(req.body)
 
       if (!cardNumber || !expiryMonth || !expiryYear || !cvv || !cardholderName) {
         return response.badReq(res, { message: 'Required fields are missing' });
@@ -71,7 +70,6 @@ const cardController = {
         isDefault: isDefault || false
       };
 
-      console.log(cardData)
 
       if (isDefault) {
         await Card.updateMany(
