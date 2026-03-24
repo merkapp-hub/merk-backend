@@ -10,12 +10,12 @@ const cardSchema = new mongoose.Schema({
   cardNumber: {
     type: String,
     required: true,
-    // set: function (value) {
-    //   return this.encrypt(value);
-    // },
-    // get: function (value) {
-    //   return this.decrypt(value);
-    // }
+    set: function (value) {
+      return this.encrypt(value);
+    },
+    get: function (value) {
+      return this.decrypt(value);
+    }
   },
   lastFour: {
     type: String,
