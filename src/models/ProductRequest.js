@@ -265,8 +265,32 @@ productrequestchema.set("toJSON", {
 productrequestchema.index({ location: "2dsphere" });
 productrequestchema.index({ orderId: 1 }, { unique: true });
 
+// Add index for PayPal order ID to prevent duplicates
+productrequestchema.index({ 'paymentDetails.paypalOrderId': 1 }, { 
+  unique: true, 
+  sparse: true,
+  partialFilterExpression: { 
+    'paymentDetails.paypalOrderId': { $exists: true, $ne: null, $ne: '' } 
+  }
+});
+
 productrequestchema.pre('save', async function (next) {
   const ProductRequest = this.constructor;
+
+  // Check for duplicate PayPal order ID
+  if (this.paymentDetails?.paypalOrderId && this.paymentmode === 'paypal') {
+    const existing = await ProductRequest.findOne({ 
+      'paymentDetails.paypalOrderId': this.paymentDetails.paypalOrderId,
+      _id: { $ne: this._id } // Exclude current document if updating
+    });
+    
+    if (existing) {
+      const error = new Error('Order already exists for this PayPal payment');
+      error.code = 'DUPLICATE_PAYPAL_ORDER';
+      error.existingOrderId = existing.orderId;
+      return next(error);
+    }
+  }
 
   if (!this.orderId) {
     let newOrderId;

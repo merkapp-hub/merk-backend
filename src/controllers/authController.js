@@ -429,19 +429,29 @@ module.exports = {
 
       const user = await User.findOne({ email });
 
-      console.log('ssssss', user);
+      console.log('User found for OTP:', user ? 'Yes' : 'No');
       if (!user) {
-        return response.badReq(res, { message: 'Email does exist.' });
+        return response.badReq(res, { message: 'Email does not exist.' });
       }
-      // OTP is fixed for Now: 0000
-      let ran_otp = '0000';
-      // let ran_otp = Math.floor(1000 + Math.random() * 9000);
-      // await mailNotification.sendOTPmail({
-      //   code: ran_otp,
-      //   email: email
-      // });
+      
+      // Generate random OTP
+      let ran_otp = Math.floor(1000 + Math.random() * 9000);
+      console.log('Generated OTP:', ran_otp, 'for email:', email);
+      
+      // Send OTP email
+      try {
+        const mailNotification = require('../services/mailNotification');
+        await mailNotification.sendOTPmail({
+          code: ran_otp,
+          email: email
+        });
+        console.log('✅ OTP email sent successfully to:', email);
+      } catch (emailError) {
+        console.error('❌ Error sending OTP email:', emailError);
+        return response.error(res, { message: 'Failed to send OTP email. Please try again.' });
+      }
+      
       let ver = new Verification({
-        //email: email,
         user: user._id,
         otp: ran_otp,
         expiration_at: userHelper.getDatewithAddedMinutes(5),
@@ -449,8 +459,9 @@ module.exports = {
       await ver.save();
       let token = await userHelper.encode(ver._id);
 
-      return response.success(res, { message: 'OTP sent.', token });
+      return response.success(res, { message: 'OTP sent to your email.', token });
     } catch (error) {
+      console.error('❌ SendOTP error:', error);
       return response.error(res, error);
     }
   },

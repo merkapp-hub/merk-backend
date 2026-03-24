@@ -1229,6 +1229,7 @@ createProductRequest: async (req, res) => {
         shipping_address: payload.shipping_address,
         total: 0,
         paymentmode: payload.paymentmode,
+        paymentDetails: payload.paymentDetails || {}, // Add PayPal payment details
         timeslot: payload.timeslot,
         deliveryCharge: payload.deliveryCharge || 0,
         deliveryTip: payload.deliveryTip || 0,
@@ -1293,6 +1294,14 @@ createProductRequest: async (req, res) => {
                 const taxAmount = (baseTotal * taxRate) / 100;
                 const deliveryCharge = sellerOrders[sellerId].deliveryCharge || 0;
                 const deliveryTip = sellerOrders[sellerId].deliveryTip || 0;
+
+                console.log(`💰 Order charges for seller ${sellerId}:`, {
+                    baseTotal,
+                    taxAmount,
+                    deliveryCharge,
+                    deliveryTip,
+                    payloadDeliveryCharge: payload.deliveryCharge
+                });
 
                 sellerOrders[sellerId].tax = taxAmount;
                 sellerOrders[sellerId].servicefee = feeData?.Servicefee || 0;
@@ -1542,9 +1551,43 @@ createProductRequest: async (req, res) => {
         });
 
     } catch (error) {
-       
+        console.error("❌ Error in createProductRequest:", error);
         
- 
+        // Handle duplicate PayPal order error specifically
+        if (error.code === 'DUPLICATE_PAYPAL_ORDER') {
+            console.log("🔄 Duplicate PayPal order detected, returning existing order info");
+            return res.status(200).json({
+                status: true,
+                success: true,
+                message: "Order already exists for this payment",
+                data: {
+                    status: true,
+                    existingOrderId: error.existingOrderId,
+                    isDuplicate: true
+                }
+            });
+        }
+        
+        // Handle MongoDB duplicate key error (E11000)
+        if (error.code === 11000 && error.keyPattern && error.keyPattern['paymentDetails.paypalOrderId']) {
+            console.log("🔄 MongoDB duplicate PayPal order ID detected");
+            return res.status(200).json({
+                status: true,
+                success: true,
+                message: "Order already exists for this payment",
+                data: {
+                    status: true,
+                    isDuplicate: true
+                }
+            });
+        }
+        
+        console.error("❌ Full error details:", {
+            message: error.message,
+            code: error.code,
+            stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+        });
+        
         if (!res.headersSent) {
             return res.status(500).json({
                 status: false,
@@ -3051,6 +3094,15 @@ getSellerProductByAdmin: async (req, res) => {
 
       const taxAmount = order.tax || 0;
       const deliveryCharge = order.deliveryCharge || 0;
+
+      console.log(`📄 Invoice Generation - Order charges:`, {
+        orderId: order._id,
+        orderIdCustom: order.orderId,
+        taxAmount,
+        deliveryCharge,
+        total: order.total,
+        finalAmount: order.finalAmount
+      });
 
       doc.fontSize(10)
         .fillColor('#6b7280')

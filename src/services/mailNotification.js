@@ -258,12 +258,44 @@ module.exports = {
   },
 
   sendOTPmail: async ({ email, code }) => {
-    console.log(email, code);
+    console.log('Sending OTP email to:', email, 'with code:', code);
     try {
-      const html = `<div> \r\n<p>Hello,<\/p>\r\n\r\n<p> Welcome to <strong>Resaz</strong>. <\/p>\r\n\r\n<p>Your One-Time password  code is: <strong>${code}</strong>. This passcode will expire in 5 minutes<\/p>\r\n<\/br>Thanks,<\/p>\r\n\r\n<p><b>The Resaz Account Team<\/b><\/p><\/div>`;
-      return await sendMail(email, "Password Reset Instructions", html);
+      const html = `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px; background-color: #f9f9f9;">
+          <div style="background-color: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
+            <div style="text-align: center; margin-bottom: 30px;">
+              <h1 style="color: #12344D; margin: 0; font-size: 28px;">Merk App</h1>
+              <p style="color: #666; margin: 10px 0 0 0;">Password Reset Request</p>
+            </div>
+            
+            <p style="color: #333; font-size: 16px; line-height: 1.5;">Hello,</p>
+            
+            <p style="color: #333; font-size: 16px; line-height: 1.5;">
+              We received a request to reset your password for your <strong>Merk App</strong> account.
+            </p>
+            
+            <div style="background-color: #f8f9fa; padding: 20px; border-radius: 8px; text-align: center; margin: 25px 0;">
+              <p style="color: #333; margin: 0 0 10px 0; font-size: 16px;">Your One-Time Password (OTP) is:</p>
+              <h2 style="color: #E58F14; font-size: 32px; margin: 0; letter-spacing: 4px; font-weight: bold;">${code}</h2>
+              <p style="color: #666; margin: 10px 0 0 0; font-size: 14px;">This code will expire in 5 minutes</p>
+            </div>
+            
+            <p style="color: #333; font-size: 16px; line-height: 1.5;">
+              If you didn't request this password reset, please ignore this email or contact our support team.
+            </p>
+            
+            <div style="border-top: 1px solid #eee; margin-top: 30px; padding-top: 20px; text-align: center;">
+              <p style="color: #666; font-size: 14px; margin: 0;">
+                Thanks,<br>
+                <strong>The Merk App Team</strong>
+              </p>
+            </div>
+          </div>
+        </div>
+      `;
+      return await sendMail(email, "Password Reset - Your OTP Code", html);
     } catch (err) {
-      console.log(err);
+      console.error('Error sending OTP email:', err);
       throw new Error("Could not send OTP mail");
     }
   },
