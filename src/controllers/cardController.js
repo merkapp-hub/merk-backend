@@ -31,11 +31,13 @@ const cardController = {
         isDefault
       } = req.body;
 
+      console.log(req.body)
+
       if (!cardNumber || !expiryMonth || !expiryYear || !cvv || !cardholderName) {
         return response.badReq(res, { message: 'Required fields are missing' });
       }
 
-      const cleanCardNumber = cardNumber.toString().replace(/\s+/g, '');
+      const cleanCardNumber = cardNumber.replace(/\s+/g, '');
 
       if (cleanCardNumber.length < 13 || cleanCardNumber.length > 19) {
         return response.badReq(res, { message: 'Invalid card number' });
