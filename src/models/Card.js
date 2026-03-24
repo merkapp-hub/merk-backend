@@ -10,12 +10,12 @@ const cardSchema = new mongoose.Schema({
   cardNumber: {
     type: String,
     required: true,
-    set: function(value) {
-      return this.encrypt(value);
-    },
-    get: function(value) {
-      return this.decrypt(value);
-    }
+    // set: function (value) {
+    //   return this.encrypt(value);
+    // },
+    // get: function (value) {
+    //   return this.decrypt(value);
+    // }
   },
   lastFour: {
     type: String,
@@ -36,10 +36,10 @@ const cardSchema = new mongoose.Schema({
   cvv: {
     type: String,
     required: true,
-    set: function(value) {
+    set: function (value) {
       return this.encrypt(value);
     },
-    get: function(value) {
+    get: function (value) {
       return this.decrypt(value);
     }
   },
@@ -63,30 +63,75 @@ const cardSchema = new mongoose.Schema({
   toObject: { getters: false }
 });
 
-const ENCRYPTION_KEY = process.env.CARD_ENCRYPTION_KEY;
-const ALGORITHM = 'aes-256-cbc';
+// const ENCRYPTION_KEY = process.env.CARD_ENCRYPTION_KEY;
+// const ALGORITHM = 'aes-256-cbc';
 
-cardSchema.methods.encrypt = function(text) {
+const ALGORITHM = "aes-256-cbc";
+
+const ENCRYPTION_KEY = crypto
+  .createHash("sha256")
+  .update(String(process.env.CARD_ENCRYPTION_KEY))
+  .digest("base64")
+  .substring(0, 32);
+
+
+// cardSchema.methods.encrypt = function (text) {
+//   if (!text) return text;
+//   const iv = crypto.randomBytes(16);
+//   const cipher = crypto.createCipher(ALGORITHM, ENCRYPTION_KEY);
+//   let encrypted = cipher.update(text, 'utf8', 'hex');
+//   encrypted += cipher.final('hex');
+//   return iv.toString('hex') + ':' + encrypted;
+// };
+
+// cardSchema.methods.decrypt = function (text) {
+//   if (!text || !text.includes(':')) return text;
+//   const textParts = text.split(':');
+//   const iv = Buffer.from(textParts.shift(), 'hex');
+//   const encryptedText = textParts.join(':');
+//   const decipher = crypto.createDecipher(ALGORITHM, ENCRYPTION_KEY);
+//   let decrypted = decipher.update(encryptedText, 'hex', 'utf8');
+//   decrypted += decipher.final('utf8');
+//   return decrypted;
+// };
+
+
+cardSchema.methods.encrypt = function (text) {
   if (!text) return text;
+
   const iv = crypto.randomBytes(16);
-  const cipher = crypto.createCipher(ALGORITHM, ENCRYPTION_KEY);
-  let encrypted = cipher.update(text, 'utf8', 'hex');
-  encrypted += cipher.final('hex');
-  return iv.toString('hex') + ':' + encrypted;
+
+  const cipher = crypto.createCipheriv(
+    ALGORITHM,
+    Buffer.from(ENCRYPTION_KEY),
+    iv
+  );
+
+  let encrypted = cipher.update(text, "utf8", "hex");
+  encrypted += cipher.final("hex");
+
+  return iv.toString("hex") + ":" + encrypted;
 };
 
-cardSchema.methods.decrypt = function(text) {
-  if (!text || !text.includes(':')) return text;
-  const textParts = text.split(':');
-  const iv = Buffer.from(textParts.shift(), 'hex');
-  const encryptedText = textParts.join(':');
-  const decipher = crypto.createDecipher(ALGORITHM, ENCRYPTION_KEY);
-  let decrypted = decipher.update(encryptedText, 'hex', 'utf8');
-  decrypted += decipher.final('utf8');
+cardSchema.methods.decrypt = function (text) {
+  if (!text || !text.includes(":")) return text;
+
+  const parts = text.split(":");
+  const iv = Buffer.from(parts.shift(), "hex");
+  const encryptedText = parts.join(":");
+
+  const decipher = crypto.createDecipheriv(
+    ALGORITHM,
+    Buffer.from(ENCRYPTION_KEY),
+    iv
+  );
+
+  let decrypted = decipher.update(encryptedText, "hex", "utf8");
+  decrypted += decipher.final("utf8");
+
   return decrypted;
 };
-
-cardSchema.pre('save', async function(next) {
+cardSchema.pre('save', async function (next) {
   if (this.isDefault) {
     await mongoose.model('Card').updateMany(
       { userId: this.userId, _id: { $ne: this._id } },
@@ -96,7 +141,7 @@ cardSchema.pre('save', async function(next) {
   next();
 });
 
-cardSchema.methods.toSafeObject = function() {
+cardSchema.methods.toSafeObject = function () {
   const obj = this.toObject();
   delete obj.cardNumber;
   delete obj.cvv;
