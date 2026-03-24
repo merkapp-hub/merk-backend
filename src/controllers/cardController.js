@@ -69,6 +69,8 @@ const cardController = {
         isDefault: isDefault || false
       };
 
+      console.log(cardData)
+
       if (isDefault) {
         await Card.updateMany(
           { userId },
