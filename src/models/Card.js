@@ -143,8 +143,8 @@ cardSchema.pre('save', async function (next) {
 
 cardSchema.methods.toSafeObject = function () {
   const obj = this.toObject();
-  delete obj.cardNumber;
-  delete obj.cvv;
+  // delete obj.cardNumber;
+  // delete obj.cvv;
   return obj;
 };
 
