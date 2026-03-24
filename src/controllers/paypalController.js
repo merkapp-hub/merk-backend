@@ -43,16 +43,16 @@ exports.createOrder = async (req, res) => {
       }
     }
 
-    // Calculate shipping (difference between total and item total)
+    
     let shippingCost = Number(total) - itemTotal;
     
-    // Ensure shipping cost is not negative
+  
     if (shippingCost < 0) {
       shippingCost = 0;
       total = itemTotal;
     }
 
-    // Build purchase units with proper breakdown
+   
     const purchase_units = [{
       amount: {
         currency_code: 'USD',
@@ -85,8 +85,8 @@ exports.createOrder = async (req, res) => {
           address_line_1: shipping_address.address || 'Address not provided',
           admin_area_2: shipping_address.city || 'City',
           admin_area_1: shipping_address.state?.value || shipping_address.state || '',
-          postal_code: shipping_address.pinCode || '00000',
-          country_code: shipping_address.country?.value || 'US'
+          postal_code: shipping_address.pinCode || '00000', // Use 00000 as default for Honduras
+          country_code: shipping_address.country?.value || 'HN' // Default to Honduras
         }
       } : undefined
     }];
@@ -355,16 +355,16 @@ exports.processCardPayment = async (req, res) => {
     });
 
     // Determine country code based on shipping address
-    let countryCode = 'US'; // Default to US for PayPal compatibility
+    let countryCode = 'HN'; // Default to Honduras for this client
     if (shipping_address.country) {
       const countryMap = {
-        'Honduras': 'US', // Use US for PayPal compatibility
-        'Guatemala': 'US', 
-        'El Salvador': 'US',
+        'Honduras': 'HN',
+        'Guatemala': 'GT', 
+        'El Salvador': 'SV',
         'United States': 'US',
         'USA': 'US'
       };
-      countryCode = countryMap[shipping_address.country] || 'US';
+      countryCode = countryMap[shipping_address.country] || 'HN'; // Default to Honduras
     }
 
     request.requestBody({
