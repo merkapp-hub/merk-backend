@@ -744,6 +744,23 @@ exports.processCardPaymentNew = async (req, res) => {
     });
 
     const order = await client().execute(request);
+    console.log(order)
+    if (order.result.status !== 'COMPLETED') {
+      const captureRequest = new checkoutNodeJssdk.orders.OrdersCaptureRequest(order.result.id);
+      captureRequest.requestBody({});
+
+      const capture = await client().execute(captureRequest);
+
+      console.log('Capture Response:', capture.result);
+
+      if (capture.result.status !== 'COMPLETED') {
+        return res.status(400).json({
+          status: false,
+          message: 'Payment not completed',
+          data: capture.result
+        });
+      }
+    }
 
     // Save order to database
     const newOrder = new ProductRequest({
