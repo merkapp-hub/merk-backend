@@ -20,5 +20,6 @@ router.post('/paypal/refund', authenticate, paypalController.refundPayment);
 
 // Card Payment (In-App)
 router.post('/paypal/process-card-payment', authenticate, paypalController.processCardPayment);
+router.post('/paypal/process-card-payment/new', authenticate, paypalController.processCardPaymentNew);
 
 module.exports = router;

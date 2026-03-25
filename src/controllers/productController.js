@@ -34,150 +34,150 @@ module.exports = {
   //   }
   // },
 
-createProduct: async (req, res) => {
+  createProduct: async (req, res) => {
     try {
-        const payload = req?.body || {};
-        
-        const parseJSONField = (field, defaultValue = []) => {
-            if (field && typeof field === 'string') {
-                try {
-                    return JSON.parse(field);
-                } catch (e) {
-                    console.log(`Error parsing ${field}:`, e.message);
-                    return defaultValue;
-                }
-            }
-            return field || defaultValue;
-        };
+      const payload = req?.body || {};
 
-        payload.price_slot = parseJSONField(payload.price_slot, []);
-        payload.attributes = parseJSONField(payload.attributes, []);
-        payload.varients = parseJSONField(payload.varients, []);
-        
-        // Handle hasVariants flag
-        payload.hasVariants = payload.hasVariants === 'true' || payload.hasVariants === true;
-        
-        if (payload.category && typeof payload.category === 'string') {
-            payload.category = payload.category.trim();
+      const parseJSONField = (field, defaultValue = []) => {
+        if (field && typeof field === 'string') {
+          try {
+            return JSON.parse(field);
+          } catch (e) {
+            console.log(`Error parsing ${field}:`, e.message);
+            return defaultValue;
+          }
         }
-        
-        // Handle images from file uploads
-        let uploadedImages = [];
-        if (req.files && req.files.length > 0) {
-            uploadedImages = req.files.map(file => file.path);
-            console.log('Uploaded images from files:', uploadedImages);
-        }
-        
-        // Handle images from URLs (for normal products)
-        let urlImages = [];
-        if (payload.imageUrls) {
-            urlImages = parseJSONField(payload.imageUrls, []);
-            console.log('Images from URLs:', urlImages);
-        }
-        
-        // Combine both file uploads and URL images
-        payload.images = [...uploadedImages, ...urlImages];
-        console.log('Final images array:', payload.images);
-        
-        if (payload.name) {
-            payload.slug = payload.name
-                .toLowerCase()
-                .trim()
-                .replace(/ /g, "-")
-                .replace(/[^\w-]+/g, "");
-        }
+        return field || defaultValue;
+      };
 
-        // Generate SKU if not provided
-        if (!payload.sku) {
-            const prefix = payload.name.substring(0, 3).toUpperCase();
-            const randomNum = Math.floor(1000 + Math.random() * 9000);
-            payload.sku = `${prefix}-${randomNum}`;
-        }
+      payload.price_slot = parseJSONField(payload.price_slot, []);
+      payload.attributes = parseJSONField(payload.attributes, []);
+      payload.varients = parseJSONField(payload.varients, []);
 
-        // Ensure stock is a number
-        if (payload.stock) {
-            payload.stock = parseInt(payload.stock, 10) || 0;
-        } else {
-            payload.stock = 0;
-        }
+      // Handle hasVariants flag
+      payload.hasVariants = payload.hasVariants === 'true' || payload.hasVariants === true;
 
-        // Ensure model is a string
-        if (payload.model) {
-            payload.model = payload.model.toString();
-        } else {
-            payload.model = "";
-        }
+      if (payload.category && typeof payload.category === 'string') {
+        payload.category = payload.category.trim();
+      }
 
-        // Validate pricing based on product type
-        if (payload.hasVariants) {
-            // For variant products, ensure each variant has pricing
-            if (!payload.varients || payload.varients.length === 0) {
-                return response.error(res, {
-                    message: 'Products with variants must have at least one variant'
-                }, 400);
-            }
-            
-            // Validate each variant has price
-            for (let variant of payload.varients) {
-                if (!variant.price || variant.price <= 0) {
-                    return response.error(res, {
-                        message: 'Each variant must have a valid price'
-                    }, 400);
-                }
-            }
-        } else {
-            // For normal products, ensure price_slot has pricing
-            if (!payload.price_slot || payload.price_slot.length === 0 || !payload.price_slot[0].price) {
-                return response.error(res, {
-                    message: 'Normal products must have a price'
-                }, 400);
-            }
+      // Handle images from file uploads
+      let uploadedImages = [];
+      if (req.files && req.files.length > 0) {
+        uploadedImages = req.files.map(file => file.path);
+        console.log('Uploaded images from files:', uploadedImages);
+      }
+
+      // Handle images from URLs (for normal products)
+      let urlImages = [];
+      if (payload.imageUrls) {
+        urlImages = parseJSONField(payload.imageUrls, []);
+        console.log('Images from URLs:', urlImages);
+      }
+
+      // Combine both file uploads and URL images
+      payload.images = [...uploadedImages, ...urlImages];
+      console.log('Final images array:', payload.images);
+
+      if (payload.name) {
+        payload.slug = payload.name
+          .toLowerCase()
+          .trim()
+          .replace(/ /g, "-")
+          .replace(/[^\w-]+/g, "");
+      }
+
+      // Generate SKU if not provided
+      if (!payload.sku) {
+        const prefix = payload.name.substring(0, 3).toUpperCase();
+        const randomNum = Math.floor(1000 + Math.random() * 9000);
+        payload.sku = `${prefix}-${randomNum}`;
+      }
+
+      // Ensure stock is a number
+      if (payload.stock) {
+        payload.stock = parseInt(payload.stock, 10) || 0;
+      } else {
+        payload.stock = 0;
+      }
+
+      // Ensure model is a string
+      if (payload.model) {
+        payload.model = payload.model.toString();
+      } else {
+        payload.model = "";
+      }
+
+      // Validate pricing based on product type
+      if (payload.hasVariants) {
+        // For variant products, ensure each variant has pricing
+        if (!payload.varients || payload.varients.length === 0) {
+          return response.error(res, {
+            message: 'Products with variants must have at least one variant'
+          }, 400);
         }
 
-        console.log('Final payload:', payload);
-        
-        let product = new Product(payload);
-        const savedProduct = await product.save();
-        
-        console.log('Product saved:', savedProduct._id);
-        
-        return response.success(res, { 
-            message: "Product added successfully",
-            product: savedProduct
-        });
-        
+        // Validate each variant has price
+        for (let variant of payload.varients) {
+          if (!variant.price || variant.price <= 0) {
+            return response.error(res, {
+              message: 'Each variant must have a valid price'
+            }, 400);
+          }
+        }
+      } else {
+        // For normal products, ensure price_slot has pricing
+        if (!payload.price_slot || payload.price_slot.length === 0 || !payload.price_slot[0].price) {
+          return response.error(res, {
+            message: 'Normal products must have a price'
+          }, 400);
+        }
+      }
+
+      console.log('Final payload:', payload);
+
+      let product = new Product(payload);
+      const savedProduct = await product.save();
+
+      console.log('Product saved:', savedProduct._id);
+
+      return response.success(res, {
+        message: "Product added successfully",
+        product: savedProduct
+      });
+
     } catch (error) {
-        console.error('Product creation error:', error);
-        
-        if (error.name === 'ValidationError') {
-            return response.error(res, {
-                message: 'Validation failed',
-                details: error.errors
-            }, 400);
-        }
-        
-        if (error.code === 'LIMIT_FILE_SIZE') {
-            return response.error(res, {
-                message: 'File size too large. Maximum 10MB allowed.'
-            }, 400);
-        }
-        
-        return response.error(res, {
-            message: 'Internal server error',
-            error: error.message
-        }, 500);
-    }
-},
+      console.error('Product creation error:', error);
 
- getProduct: async (req, res) => {
+      if (error.name === 'ValidationError') {
+        return response.error(res, {
+          message: 'Validation failed',
+          details: error.errors
+        }, 400);
+      }
+
+      if (error.code === 'LIMIT_FILE_SIZE') {
+        return response.error(res, {
+          message: 'File size too large. Maximum 10MB allowed.'
+        }, 400);
+      }
+
+      return response.error(res, {
+        message: 'Internal server error',
+        error: error.message
+      }, 500);
+    }
+  },
+
+  getProduct: async (req, res) => {
     try {
       const page = parseInt(req.query.page) || 1;
       const limit = parseInt(req.query.limit) || 12;
       const skip = (page - 1) * limit;
 
-      
+
       const cacheKey = `products_page${page}_limit${limit}_seller${req.query.seller_id || 'all'}`;
-      
+
       // Check cache first
       const cachedData = cache.get(cacheKey);
       if (cachedData && (Date.now() - cachedData.timestamp) < CACHE_TTL) {
@@ -185,13 +185,13 @@ createProduct: async (req, res) => {
         return res.status(200).json(cachedData.data);
       }
 
-    
+
       let query = {
         // For non-admin users, only show verified and non-suspended products
         status: "verified",
         is_verified: true
       };
-      
+
       // For admin users, show all products except suspended ones by default
       if (req.user && req.user.role === 'admin') {
         delete query.is_verified;
@@ -201,12 +201,12 @@ createProduct: async (req, res) => {
           query.status = { $ne: 'suspended' };
         }
       }
-      
+
       if (req.query.seller_id) {
         query.userid = req.query.seller_id;
       }
 
-      
+
       const products = await Product.aggregate([
         { $match: query },
         { $sort: { createdAt: -1 } },
@@ -312,15 +312,15 @@ createProduct: async (req, res) => {
       let product = await Product.findOne({ slug: req?.params?.id })
         .populate("category", "name slug")
         .populate("userid", "firstName lastName email companyName logo");
-      
+
       // Check if product exists before accessing its properties
       if (!product) {
-        return response.error(res, { 
-          message: "Product not found", 
-          status: 404 
+        return response.error(res, {
+          message: "Product not found",
+          status: 404
         });
       }
-      
+
       let reviews = await Review.find({ product: product._id }).populate(
         "posted_by",
         "username"
@@ -350,20 +350,20 @@ createProduct: async (req, res) => {
       let product = await Product.findById(req?.params?.id)
         .populate("category", "name")
         .populate("userid", "firstName lastName email companyName logo");
-      
+
       if (!product) {
-        return response.error(res, { 
-          message: "Product not found", 
-          status: 404 
+        return response.error(res, {
+          message: "Product not found",
+          status: 404
         });
       }
-      
+
       let reviews = await Review.find({ product: product._id }).populate('posted_by', 'username');
       let favourite;
       if (req.query.user) {
         favourite = await Favourite.findOne({ product: product._id, user: req.query.user });
       }
-      
+
       let d = {
         ...product._doc,
         seller: product.userid, // Add seller info
@@ -371,7 +371,7 @@ createProduct: async (req, res) => {
         reviews,
         favourite: favourite ? true : false
       };
-      
+
       return response.success(res, d);
     } catch (error) {
       return response.error(res, error);
@@ -583,119 +583,119 @@ createProduct: async (req, res) => {
     }
   },
 
-updateProduct: async (req, res) => {
+  updateProduct: async (req, res) => {
     try {
-        const payload = req?.body || {};
-        
-        // Parse JSON strings back to objects/arrays
-        if (payload.price_slot && typeof payload.price_slot === 'string') {
-            try {
-                payload.price_slot = JSON.parse(payload.price_slot);
-            } catch (e) {
-                payload.price_slot = [];
-            }
+      const payload = req?.body || {};
+
+      // Parse JSON strings back to objects/arrays
+      if (payload.price_slot && typeof payload.price_slot === 'string') {
+        try {
+          payload.price_slot = JSON.parse(payload.price_slot);
+        } catch (e) {
+          payload.price_slot = [];
         }
-        
-        if (payload.attributes && typeof payload.attributes === 'string') {
-            try {
-                payload.attributes = JSON.parse(payload.attributes);
-            } catch (e) {
-                payload.attributes = [];
-            }
+      }
+
+      if (payload.attributes && typeof payload.attributes === 'string') {
+        try {
+          payload.attributes = JSON.parse(payload.attributes);
+        } catch (e) {
+          payload.attributes = [];
         }
-        
-        if (payload.category) {
-            if (typeof payload.category === 'string' && !payload.category.match(/^[0-9a-fA-F]{24}$/)) {
-                delete payload.category;
-            }
+      }
+
+      if (payload.category) {
+        if (typeof payload.category === 'string' && !payload.category.match(/^[0-9a-fA-F]{24}$/)) {
+          delete payload.category;
         }
-        
-        if (payload.varients && typeof payload.varients === 'string') {
-            try {
-                payload.varients = JSON.parse(payload.varients);
-            } catch (e) {
-                payload.varients = [];
-            }
+      }
+
+      if (payload.varients && typeof payload.varients === 'string') {
+        try {
+          payload.varients = JSON.parse(payload.varients);
+        } catch (e) {
+          payload.varients = [];
         }
-        
-        // Handle hasVariants flag
-        payload.hasVariants = payload.hasVariants === 'true' || payload.hasVariants === true;
-        
-        // Parse JSON helper
-        const parseJSONField = (field, defaultValue = []) => {
-            if (field && typeof field === 'string') {
-                try {
-                    return JSON.parse(field);
-                } catch (e) {
-                    return defaultValue;
-                }
-            }
-            return field || defaultValue;
-        };
-        
-        // Handle images from file uploads
-        let uploadedImages = [];
-        if (req.files && req.files.length > 0) {
-            uploadedImages = req.files.map(file => file.path);
+      }
+
+      // Handle hasVariants flag
+      payload.hasVariants = payload.hasVariants === 'true' || payload.hasVariants === true;
+
+      // Parse JSON helper
+      const parseJSONField = (field, defaultValue = []) => {
+        if (field && typeof field === 'string') {
+          try {
+            return JSON.parse(field);
+          } catch (e) {
+            return defaultValue;
+          }
         }
-        
-        // Handle images from URLs (for normal products)
-        let urlImages = [];
-        if (payload.imageUrls) {
-            urlImages = parseJSONField(payload.imageUrls, []);
+        return field || defaultValue;
+      };
+
+      // Handle images from file uploads
+      let uploadedImages = [];
+      if (req.files && req.files.length > 0) {
+        uploadedImages = req.files.map(file => file.path);
+      }
+
+      // Handle images from URLs (for normal products)
+      let urlImages = [];
+      if (payload.imageUrls) {
+        urlImages = parseJSONField(payload.imageUrls, []);
+      }
+
+      // Combine both file uploads and URL images
+      if (uploadedImages.length > 0 || urlImages.length > 0) {
+        payload.images = [...uploadedImages, ...urlImages];
+      }
+
+      if (payload.name) {
+        payload.slug = payload.name
+          .toLowerCase()
+          .replace(/ /g, "-")
+          .replace(/[^\w-]+/g, "");
+      }
+
+      // Validate pricing based on product type
+      if (payload.hasVariants) {
+        if (!payload.varients || payload.varients.length === 0) {
+          return response.error(res, {
+            message: 'Products with variants must have at least one variant'
+          }, 400);
         }
-        
-        // Combine both file uploads and URL images
-        if (uploadedImages.length > 0 || urlImages.length > 0) {
-            payload.images = [...uploadedImages, ...urlImages];
+
+        for (let variant of payload.varients) {
+          if (!variant.price || variant.price <= 0) {
+            return response.error(res, {
+              message: 'Each variant must have a valid price'
+            }, 400);
+          }
         }
-        
-        if (payload.name) {
-            payload.slug = payload.name
-                .toLowerCase()
-                .replace(/ /g, "-")
-                .replace(/[^\w-]+/g, "");
+      } else {
+        if (!payload.price_slot || payload.price_slot.length === 0 || !payload.price_slot[0].price) {
+          return response.error(res, {
+            message: 'Normal products must have a price'
+          }, 400);
         }
-        
-        // Validate pricing based on product type
-        if (payload.hasVariants) {
-            if (!payload.varients || payload.varients.length === 0) {
-                return response.error(res, {
-                    message: 'Products with variants must have at least one variant'
-                }, 400);
-            }
-            
-            for (let variant of payload.varients) {
-                if (!variant.price || variant.price <= 0) {
-                    return response.error(res, {
-                        message: 'Each variant must have a valid price'
-                    }, 400);
-                }
-            }
-        } else {
-            if (!payload.price_slot || payload.price_slot.length === 0 || !payload.price_slot[0].price) {
-                return response.error(res, {
-                    message: 'Normal products must have a price'
-                }, 400);
-            }
-        }
-        
-        let product = await Product.findByIdAndUpdate(payload?.id, payload, {
-            new: true,
-            upsert: true,
-        });
-        
-        return response.success(res, product);
+      }
+
+      let product = await Product.findByIdAndUpdate(payload?.id, payload, {
+        new: true,
+        upsert: true,
+      });
+
+      return response.success(res, product);
     } catch (error) {
-        return response.error(res, error);
+      return response.error(res, error);
     }
-},
+  },
 
   // Generate delivery label for a sold product
   generateDeliveryLabel: async (req, res) => {
     try {
       const { productId, orderId, customerName, customerAddress, customerPhone } = req.body;
-      
+
       const product = await Product.findById(productId);
       if (!product) {
         return response.error(res, { message: 'Product not found' }, 404);
@@ -721,7 +721,7 @@ updateProduct: async (req, res) => {
       // Invalidate cache
       cache.delete('products');
 
-      return response.success(res, { 
+      return response.success(res, {
         message: 'Delivery label generated successfully',
         deliveryLabel: deliveryLabel,
         printUrl: `/api/products/${productId}/delivery-label/print`
@@ -737,17 +737,17 @@ updateProduct: async (req, res) => {
     try {
       const { productId } = req.params;
       const product = await Product.findById(productId);
-      
+
       if (!product || !product.deliveryLabel) {
         return response.error(res, { message: 'Delivery label not found' }, 404);
       }
 
       const label = JSON.parse(product.deliveryLabel);
-      
+
       // Set content type to PDF for printing
       res.setHeader('Content-Type', 'application/pdf');
       res.setHeader('Content-Disposition', `attachment; filename=delivery-${label.orderId}.pdf`);
-      
+
       // Here you would typically use a PDF generation library like pdfkit or puppeteer
       // This is a simplified example
       res.send(`
@@ -831,17 +831,17 @@ updateProduct: async (req, res) => {
       );
       await Product.deleteMany({ _id: { $in: newid } });
       return response.success(res, { meaasge: "Deleted successfully" });
-    } catch (error) { 
+    } catch (error) {
       return response.error(res, error);
     }
   },
 
   requestProduct: async (req, res) => {
-      console.log("=== API HIT ===");
+    console.log("=== API HIT ===");
     console.log("Request body:", req.body);
     console.log("User ID:", req.user?.id);
     try {
-      
+
       const payload = req?.body || {};
       const sellersNotified = new Set();
       const sellerOrders = {};
@@ -935,7 +935,7 @@ updateProduct: async (req, res) => {
         const savedOrder = await newOrder.save();
         savedOrders.push(savedOrder);
         console.log('✅ Order created successfully. Order ID:', savedOrder._id);
-        
+
         try {
           const totalWeight = sellerOrders[sellerId].productDetail.reduce((sum, item) => {
             return sum + (item.qty * 0.5);
@@ -971,54 +971,54 @@ updateProduct: async (req, res) => {
         } catch (forzaError) {
           console.error('❌ Forza integration error:', forzaError.message);
         }
-        
+
         console.log('📦 Starting delivery label generation for order items:', sellerOrders[sellerId].productDetail.length);
-        
+
         for (const [index, item] of sellerOrders[sellerId].productDetail.entries()) {
-            try {
-                console.log(`\n🔍 Processing product ${index + 1}/${sellerOrders[sellerId].productDetail.length}:`);
-                console.log('   - Product ID:', item.product);
-                console.log('   - Product Name:', item.name || 'N/A');
-                
-                const deliveryLabelData = {
-                    orderId: savedOrder._id,
-                    productName: item.name || 'Product',
-                    productSKU: item.sku || 'N/A',
-                    productModel: item.model || 'N/A',
-                    customerName: payload.shipping_address?.name || 'Customer',
-                    customerAddress: `${payload.shipping_address?.address || ''}, ${payload.shipping_address?.city || ''}`.trim(),
-                    customerPhone: payload.shipping_address?.phone || 'N/A',
-                    shippingDate: new Date(),
-                    trackingNumber: `TRK-${Date.now()}-${Math.floor(Math.random() * 1000)}`
-                };
-                
-                console.log('📝 Delivery label data:', JSON.stringify(deliveryLabelData, null, 2));
-                
-                const updatedProduct = await Product.findByIdAndUpdate(
-                    item.product,
-                    { $set: { deliveryLabel: JSON.stringify(deliveryLabelData) } },
-                    { new: true }
-                );
-                
-                if (updatedProduct) {
-                    console.log('✅ Successfully updated product with delivery label');
-                    console.log('   - Product after update:', {
-                        _id: updatedProduct._id,
-                        name: updatedProduct.name,
-                        hasDeliveryLabel: !!updatedProduct.deliveryLabel,
-                        deliveryLabelLength: updatedProduct.deliveryLabel ? updatedProduct.deliveryLabel.length : 0
-                    });
-                } else {
-                    console.error('❌ Failed to update product - Product not found');
-                }
-            } catch (error) {
-                console.error('❌ Error generating delivery label for product:', {
-                    productId: item.product,
-                    error: error.message,
-                    stack: error.stack
-                });
-                // Continue with other products even if one fails
+          try {
+            console.log(`\n🔍 Processing product ${index + 1}/${sellerOrders[sellerId].productDetail.length}:`);
+            console.log('   - Product ID:', item.product);
+            console.log('   - Product Name:', item.name || 'N/A');
+
+            const deliveryLabelData = {
+              orderId: savedOrder._id,
+              productName: item.name || 'Product',
+              productSKU: item.sku || 'N/A',
+              productModel: item.model || 'N/A',
+              customerName: payload.shipping_address?.name || 'Customer',
+              customerAddress: `${payload.shipping_address?.address || ''}, ${payload.shipping_address?.city || ''}`.trim(),
+              customerPhone: payload.shipping_address?.phone || 'N/A',
+              shippingDate: new Date(),
+              trackingNumber: `TRK-${Date.now()}-${Math.floor(Math.random() * 1000)}`
+            };
+
+            console.log('📝 Delivery label data:', JSON.stringify(deliveryLabelData, null, 2));
+
+            const updatedProduct = await Product.findByIdAndUpdate(
+              item.product,
+              { $set: { deliveryLabel: JSON.stringify(deliveryLabelData) } },
+              { new: true }
+            );
+
+            if (updatedProduct) {
+              console.log('✅ Successfully updated product with delivery label');
+              console.log('   - Product after update:', {
+                _id: updatedProduct._id,
+                name: updatedProduct.name,
+                hasDeliveryLabel: !!updatedProduct.deliveryLabel,
+                deliveryLabelLength: updatedProduct.deliveryLabel ? updatedProduct.deliveryLabel.length : 0
+              });
+            } else {
+              console.error('❌ Failed to update product - Product not found');
             }
+          } catch (error) {
+            console.error('❌ Error generating delivery label for product:', {
+              productId: item.product,
+              error: error.message,
+              stack: error.stack
+            });
+            // Continue with other products even if one fails
+          }
         }
 
         // Update sold_pieces for each product
@@ -1030,24 +1030,24 @@ updateProduct: async (req, res) => {
           );
         }
 
-      
+
         // Apply commission for all payment modes (pay, cod, paypal)
         if (payload.paymentmode === "pay" || payload.paymentmode === "cod" || payload.paymentmode === "paypal") {
           const orderTotal = Number(sellerOrders[sellerId].total);
-          
+
           // Get seller's commission rate from database
           const seller = await User.findById(sellerId);
-          
+
           if (!seller) {
             console.error(`❌ Seller not found with ID: ${sellerId}`);
             throw new Error(`Seller not found: ${sellerId}`);
           }
-          
+
           const commissionRate = seller?.commissionRate || 15; // Default 15% if not set
-          
+
           const adminFee = (orderTotal * commissionRate) / 100;
           const sellerEarnings = orderTotal - adminFee;
-          
+
           console.log(`💰 [Order Creation] Seller: ${seller.firstName} ${seller.lastName}`);
           console.log(`💰 [Order Creation] Commission Rate: ${commissionRate}%`);
           console.log(`💰 [Order Creation] Order Total: ${orderTotal}`);
@@ -1055,14 +1055,14 @@ updateProduct: async (req, res) => {
           console.log(`💰 [Order Creation] Seller Earnings: ${sellerEarnings}`);
           console.log(`💰 [Order Creation] Payment Mode: ${payload.paymentmode}`);
 
-         
+
           await User.findByIdAndUpdate(
             sellerId,
             { $inc: { wallet: sellerEarnings } },
             { new: true, upsert: true }
           );
 
-         
+
           const adminUser = await User.findOne({ role: 'admin' });
           if (adminUser) {
             await User.findByIdAndUpdate(
@@ -1120,588 +1120,595 @@ updateProduct: async (req, res) => {
       }
 
       return res.status(200).json({
-  status: true,
-  success: true,
-  message: "Product request added successfully",
-  orders: savedOrders,
-});
+        status: true,
+        success: true,
+        message: "Product request added successfully",
+        orders: savedOrders,
+      });
     } catch (error) {
-     return res.status(500).json({
-  status: false,
-  success: false,
-  message: error.message || "Internal Server Error",
-  error,
-});
+      return res.status(500).json({
+        status: false,
+        success: false,
+        message: error.message || "Internal Server Error",
+        error,
+      });
     }
   },
 
 
-createProductRequest: async (req, res) => {
+  createProductRequest: async (req, res) => {
     console.log("🚀 createProductRequest Backend API called");
     console.log("📦 Request body:", req.body);
     console.log("👤 User:", req.user);
     console.log("💰 Currency Info Received:", {
-        userCurrency: req.body.userCurrency,
-        currencySymbol: req.body.currencySymbol,
-        exchangeRate: req.body.exchangeRate,
-        displayTotal: req.body.displayTotal
+      userCurrency: req.body.userCurrency,
+      currencySymbol: req.body.currencySymbol,
+      exchangeRate: req.body.exchangeRate,
+      displayTotal: req.body.displayTotal
     });
-    
+
     try {
-       
-        req.setTimeout(60000); 
-        
-        const payload = req?.body || {};
-        
-        
-        if (!req.user || !req.user.id) {
-            console.error("❌ No authenticated user found");
-            return res.status(401).json({
-                status: false,
-                success: false,
-                message: "Authentication required"
-            });
-        }
-        
-        
-        
-        const sellersNotified = new Set();
-        const sellerOrders = {};
 
-        const productIds = payload.productDetail.map((item) => item.product);
-       
-        
-        const products = await Product.find({ _id: { $in: productIds } }).select("category").lean();
-      
-        
-        const categoryIds = products.map((p) => p.category);
-       
-        
-        const categories = await Category.find({
-            _id: { $in: categoryIds },
-        }).select("is_refundable").lean();
-        
-        const productCategoryMap = new Map();
-        products.forEach((product) => {
-            const category = categories.find((c) => c._id.equals(product.category));
-            productCategoryMap.set(
-                product._id.toString(),
-                !(category?.is_refundable ?? true)
+      req.setTimeout(60000);
+
+      const payload = req?.body || {};
+
+      console.log(payload)
+
+
+      if (!req.user || !req.user.id) {
+        console.error("❌ No authenticated user found");
+        return res.status(401).json({
+          status: false,
+          success: false,
+          message: "Authentication required"
+        });
+      }
+
+
+
+      const sellersNotified = new Set();
+      const sellerOrders = {};
+
+      const productIds = payload.productDetail.map((item) => item.product);
+
+
+      const products = await Product.find({ _id: { $in: productIds } }).select("category").lean();
+
+
+      const categoryIds = products.map((p) => p.category);
+
+
+      const categories = await Category.find({
+        _id: { $in: categoryIds },
+      }).select("is_refundable").lean();
+
+      const productCategoryMap = new Map();
+      products.forEach((product) => {
+        const category = categories.find((c) => c._id.equals(product.category));
+        productCategoryMap.set(
+          product._id.toString(),
+          !(category?.is_refundable ?? true)
+        );
+      });
+
+
+
+      for (const item of payload.productDetail) {
+
+        let sellerId = item.seller_id?.toString();
+
+
+
+        if (!sellerId || sellerId === 'FETCH_FROM_PRODUCT') {
+
+          try {
+            // Also select potential legacy field 'user' besides 'userid'
+            const product = await Product.findById(item.product).select('userid user seller_id user_id owner_id').lean();
+            if (product) {
+              sellerId = product.userid || product.user || product.seller_id || product.user_id || product.owner_id;
+            } else {
+              console.error("❌ Product not found:", item.product);
+            }
+          } catch (productError) {
+            console.error("❌ Error fetching product:", productError);
+          }
+        }
+
+        if (!sellerId) {
+          console.warn("⚠️ No seller_id found for product:", item.product, "- skipping");
+          continue;
+        }
+
+        sellerId = sellerId.toString();
+
+        if (!sellerOrders[sellerId]) {
+          sellerOrders[sellerId] = {
+            user: req.user.id,
+            seller_id: sellerId,
+            status: "Pending",
+            productDetail: [],
+            shipping_address: payload.shipping_address,
+            total: 0,
+            paymentmode: payload.paymentmode,
+            paymentDetails: payload.paymentDetails || {}, // Add PayPal payment details
+            timeslot: payload.timeslot,
+            deliveryCharge: payload.deliveryCharge || 0,
+            deliveryTip: payload.deliveryTip || 0,
+            // Add currency information for PDF generation
+            userCurrency: payload.userCurrency || 'USD',
+            currencySymbol: payload.currencySymbol || '$',
+            exchangeRate: payload.exchangeRate || 1,
+            displayTotal: payload.displayTotal || 0
+          };
+        }
+
+        if (!sellersNotified.has(sellerId)) {
+          try {
+            await notify(
+              sellerId,
+              "Order received",
+              "You have received a new order"
             );
-        });
+            sellersNotified.add(sellerId);
 
-      
-        
-        for (const item of payload.productDetail) {
-          
-            let sellerId = item.seller_id?.toString();
-           
-            
-            
-            if (!sellerId || sellerId === 'FETCH_FROM_PRODUCT') {
-               
-                try {
-                    // Also select potential legacy field 'user' besides 'userid'
-                    const product = await Product.findById(item.product).select('userid user seller_id user_id owner_id').lean();
-                    if (product) {
-                        sellerId = product.userid || product.user || product.seller_id || product.user_id || product.owner_id;
-                    } else {
-                        console.error("❌ Product not found:", item.product);
-                    }
-                } catch (productError) {
-                    console.error("❌ Error fetching product:", productError);
-                }
-            }
-            
-            if (!sellerId) {
-                console.warn("⚠️ No seller_id found for product:", item.product, "- skipping");
-                continue;
-            }
-            
-            sellerId = sellerId.toString();
+          } catch (notifyError) {
 
-            if (!sellerOrders[sellerId]) {
-              sellerOrders[sellerId] = {
-        user: req.user.id,
-        seller_id: sellerId,
-        status: "Pending",
-        productDetail: [],
-        shipping_address: payload.shipping_address,
-        total: 0,
-        paymentmode: payload.paymentmode,
-        paymentDetails: payload.paymentDetails || {}, // Add PayPal payment details
-        timeslot: payload.timeslot,
-        deliveryCharge: payload.deliveryCharge || 0,
-        deliveryTip: payload.deliveryTip || 0,
-        // Add currency information for PDF generation
-        userCurrency: payload.userCurrency || 'USD',
-        currencySymbol: payload.currencySymbol || '$',
-        exchangeRate: payload.exchangeRate || 1,
-        displayTotal: payload.displayTotal || 0
-    };
-            }
 
-            if (!sellersNotified.has(sellerId)) {
-                try {
-                    await notify(
-                        sellerId,
-                        "Order received",
-                        "You have received a new order"
-                    );
-                    sellersNotified.add(sellerId);
-
-                } catch (notifyError) {
-                  
-                    
-                }
-            }
-
-            const isReturnable = productCategoryMap.get(item.product.toString());
-
-            sellerOrders[sellerId].productDetail.push({
-                product: item.product,
-                image: item.image,
-                qty: item.qty,
-                price: item.price,
-                price_slot: item.price_slot,
-                isReturnable,
-                color: item.color,
-                name: item.name,
-                size: item.size,
-                selectedSize: item.selectedSize,
-                selectedColor: item.selectedColor
-            });
-
-          
-            sellerOrders[sellerId].total += item.qty * item.price;
+          }
         }
 
-       
-        
-        const savedOrders = [];
-        
-        console.log("🔄 Processing orders for sellers:", Object.keys(sellerOrders));
-        
-        for (const sellerId in sellerOrders) {
-            console.log(`🛍️ Processing order for seller: ${sellerId}`);
-            
-            try {
-              
-                const taxData = await Tax.findOne();
-                const feeData = await Servicefee.findOne();
-                const taxRate = taxData?.taxRate || 0;
-                const baseTotal = sellerOrders[sellerId].total;
-                const taxAmount = (baseTotal * taxRate) / 100;
-                const deliveryCharge = sellerOrders[sellerId].deliveryCharge || 0;
-                const deliveryTip = sellerOrders[sellerId].deliveryTip || 0;
+        const isReturnable = productCategoryMap.get(item.product.toString());
 
-                console.log(`💰 Order charges for seller ${sellerId}:`, {
-                    baseTotal,
-                    taxAmount,
-                    deliveryCharge,
-                    deliveryTip,
-                    payloadDeliveryCharge: payload.deliveryCharge
+        sellerOrders[sellerId].productDetail.push({
+          product: item.product,
+          image: item.image,
+          qty: item.qty,
+          price: item.price,
+          price_slot: item.price_slot,
+          isReturnable,
+          color: item.color,
+          name: item.name,
+          size: item.size,
+          selectedSize: item.selectedSize,
+          selectedColor: item.selectedColor
+        });
+
+
+        sellerOrders[sellerId].total += item.qty * item.price;
+      }
+
+
+
+      const savedOrders = [];
+
+      console.log("🔄 Processing orders for sellers:", Object.keys(sellerOrders));
+
+      for (const sellerId in sellerOrders) {
+        console.log(`🛍️ Processing order for seller: ${sellerId}`);
+
+        try {
+
+          const taxData = await Tax.findOne();
+          const feeData = await Servicefee.findOne();
+          const taxRate = taxData?.taxRate || 0;
+          const baseTotal = sellerOrders[sellerId].total;
+          const taxAmount = (baseTotal * taxRate) / 100;
+          const deliveryCharge = sellerOrders[sellerId].deliveryCharge || 0;
+          const deliveryTip = sellerOrders[sellerId].deliveryTip || 0;
+
+          console.log(`💰 Order charges for seller ${sellerId}:`, {
+            baseTotal,
+            taxAmount,
+            deliveryCharge,
+            deliveryTip,
+            payloadDeliveryCharge: payload.deliveryCharge
+          });
+
+          sellerOrders[sellerId].tax = taxAmount;
+          sellerOrders[sellerId].servicefee = feeData?.Servicefee || 0;
+          sellerOrders[sellerId].total = baseTotal;
+          sellerOrders[sellerId].finalAmount = baseTotal + taxAmount + deliveryCharge + deliveryTip;
+          console.log(sellerOrders[sellerId])
+          // return res.status(404).json({
+          //   status: false,
+          //   success: false,
+          //   payload: sellerOrders[sellerId]
+          // });
+          const newOrder = new ProductRequest(sellerOrders[sellerId]);
+          console.log("📝 Creating new order with data:", JSON.stringify(sellerOrders[sellerId], null, 2));
+
+          const savedOrder = await newOrder.save();
+          console.log("✅ Order saved successfully with ID:", savedOrder);
+
+          // Create Forza shipment for PayPal orders
+          if (payload.paymentmode === 'paypal' && payload.shipping_address?.country) {
+            try {
+              const forzaService = require('../services/forzaService');
+              const shipmentResult = await forzaService.createShipment({
+                orderId: savedOrder.orderId || savedOrder._id,
+                shipping_address: payload.shipping_address,
+                total: savedOrder.total,
+                productDetail: savedOrder.productDetail,
+                totalWeight: payload.totalWeight || savedOrder.productDetail.length * 0.5
+              });
+
+              if (shipmentResult.success) {
+                await ProductRequest.findByIdAndUpdate(savedOrder._id, {
+                  forzaShipping: {
+                    trackingNumber: shipmentResult.trackingNumber,
+                    shipmentId: shipmentResult.shipmentId,
+                    status: 'Created',
+                    estimatedDelivery: shipmentResult.estimatedDelivery,
+                    createdAt: new Date()
+                  }
                 });
-
-                sellerOrders[sellerId].tax = taxAmount;
-                sellerOrders[sellerId].servicefee = feeData?.Servicefee || 0;
-                sellerOrders[sellerId].total = baseTotal;
-                sellerOrders[sellerId].finalAmount = baseTotal + taxAmount + deliveryCharge + deliveryTip;
-
-                const newOrder = new ProductRequest(sellerOrders[sellerId]);
-                console.log("📝 Creating new order with data:", JSON.stringify(sellerOrders[sellerId], null, 2));
-                
-                const savedOrder = await newOrder.save();
-                console.log("✅ Order saved successfully with ID:", savedOrder._id);
-               
-                // Create Forza shipment for PayPal orders
-                if (payload.paymentmode === 'paypal' && payload.shipping_address?.country) {
-                    try {
-                        const forzaService = require('../services/forzaService');
-                        const shipmentResult = await forzaService.createShipment({
-                            orderId: savedOrder.orderId || savedOrder._id,
-                            shipping_address: payload.shipping_address,
-                            total: savedOrder.total,
-                            productDetail: savedOrder.productDetail,
-                            totalWeight: payload.totalWeight || savedOrder.productDetail.length * 0.5
-                        });
-
-                        if (shipmentResult.success) {
-                            await ProductRequest.findByIdAndUpdate(savedOrder._id, {
-                                forzaShipping: {
-                                    trackingNumber: shipmentResult.trackingNumber,
-                                    shipmentId: shipmentResult.shipmentId,
-                                    status: 'Created',
-                                    estimatedDelivery: shipmentResult.estimatedDelivery,
-                                    createdAt: new Date()
-                                }
-                            });
-                            console.log("📦 Forza shipment created:", shipmentResult.trackingNumber);
-                        } else {
-                            await ProductRequest.findByIdAndUpdate(savedOrder._id, {
-                                'forzaShipping.error': shipmentResult.error
-                            });
-                            console.error("❌ Forza shipment failed:", shipmentResult.error);
-                        }
-                    } catch (forzaError) {
-                        console.error("⚠️ Forza integration error:", forzaError);
-                    }
-                }
-               
-                // Send order received email immediately
-                try {
-                    const { orderReceivedMail } = require('../services/mailNotification');
-                    const customer = await User.findById(req.user.id);
-                    
-                    if (customer && customer.email) {
-                        await orderReceivedMail({
-                            email: customer.email,
-                            name: customer.firstName || 'Customer',
-                            orderId: savedOrder.orderId || savedOrder._id,
-                            orderTotal: savedOrder.total.toFixed(2),
-                            orderDate: new Date(savedOrder.createdAt).toLocaleDateString('en-US', { 
-                                month: 'short', 
-                                day: 'numeric', 
-                                year: 'numeric' 
-                            }),
-                            currencySymbol: payload.currencySymbol || '$'
-                        });
-                        console.log("📧 Order received email sent to:", customer.email);
-                    }
-                } catch (emailError) {
-                    console.error("⚠️ Error sending order received email:", emailError);
-                }
-                
-                savedOrders.push(savedOrder);
-
-                // Send notification to seller
-                const Notification = require("@models/Notification");
-                try {
-                    const notification = new Notification({
-                        title: "New Order Received",
-                        description: `You have received a new order #${savedOrder.orderId}. Please review and approve.`,
-                        for: [sellerId],
-                        type: "order",
-                        orderId: savedOrder._id,
-                        isRead: false
-                    });
-                    await notification.save();
-
-                    const seller = await User.findById(sellerId);
-                    if (seller && seller.email) {
-                        await mailNotification.sendNotification(
-                            [seller.email],
-                            "New Order Received",
-                            `You have received a new order #${savedOrder.orderId}. Please login to your seller panel to review and approve the order.`
-                        );
-                    }
-                } catch (notifError) {
-                    console.error("⚠️ Error sending seller notification:", notifError);
-                }
-
-                // Send notification to customer
-                try {
-                    const oneSignalService = require('../services/oneSignalService');
-                    const customer = await User.findById(req.user.id);
-                    
-                    if (customer) {
-                        await oneSignalService.orderReceived(savedOrder, customer);
-                        console.log("📱 Order notification sent to customer:", customer._id);
-                    }
-                } catch (customerNotifError) {
-                    console.error("⚠️ Error sending customer notification:", customerNotifError);
-                }
-
-                for (const productItem of sellerOrders[sellerId].productDetail) {
-                    await Product.findByIdAndUpdate(
-                        productItem.product,
-                        { $inc: { sold_pieces: productItem.qty } },
-                        { new: true }
-                    );
-                }
-
-                
-                console.log(`💰 Processing commission for seller: ${sellerId}`);
-                console.log(`💰 Payment mode: ${payload.paymentmode}`);
-                console.log(`💰 Order total: ${sellerOrders[sellerId].total}`);
-                
-                // Apply commission for all payment modes (pay, cod, paypal, card)
-                if (payload.paymentmode === "pay" || payload.paymentmode === "cod" || payload.paymentmode === "paypal") {
-                    const orderTotal = Number(sellerOrders[sellerId].total);
-                    
-                    // Get seller's commission rate from database
-                    const seller = await User.findById(sellerId);
-                    
-                    if (!seller) {
-                        console.error(`❌ Seller not found with ID: ${sellerId}`);
-                        throw new Error(`Seller not found: ${sellerId}`);
-                    }
-                    
-                    const commissionRate = seller?.commissionRate || 15; // Default 15% if not set
-                    
-                    const adminFee = (orderTotal * commissionRate) / 100; // Calculate dynamic admin fee
-                    const sellerEarnings = orderTotal - adminFee; // Deduct admin fee from seller's earnings
-                    
-                    console.log(`💰 Seller ID: ${sellerId}`);
-                    console.log(`💰 Seller Name: ${seller.firstName} ${seller.lastName}`);
-                    console.log(`💰 Seller commission rate: ${commissionRate}%`);
-                    console.log(`💰 Order total: ${orderTotal}`);
-                    console.log(`💰 Calculated admin fee: ${adminFee}`);
-                    console.log(`💰 Calculated seller earnings: ${sellerEarnings}`);
-                    
-                    // Update seller's wallet with the remaining amount
-                    const sellerUpdate = await User.findByIdAndUpdate(
-                        sellerId,
-                        { $inc: { wallet: sellerEarnings } },
-                        { new: true, upsert: true }
-                    );
-                    console.log(`💰 Seller wallet updated: ${sellerUpdate?.wallet}`);
-                    
-                    // Find admin user and update their cash receive amount
-                    const adminUser = await User.findOne({ role: 'admin' });
-                    if (adminUser) {
-                        const adminUpdate = await User.findByIdAndUpdate(
-                            adminUser._id,
-                            { $inc: { cashReceive: adminFee } },
-                            { new: true }
-                        );
-                        console.log(`💰 Admin commission updated: ${adminUpdate?.cashReceive}`);
-                    }
-                    
-                    // Add admin fee to the order document for record keeping
-                    await ProductRequest.findByIdAndUpdate(
-                        savedOrder._id,
-                        { 
-                            $set: { 
-                                adminFee: adminFee,
-                                sellerEarnings: sellerEarnings,
-                                commissionRate: commissionRate
-                            } 
-                        }
-                    );
-                    console.log(`💰 Order document updated with commission data`);
-                } else {
-                    console.log(`💰 Commission not applied - payment mode: ${payload.paymentmode}`);
-                }
-            } catch (orderError) {
-                console.error("❌ Error saving order for seller:", sellerId, orderError);
-                throw orderError; 
+                console.log("📦 Forza shipment created:", shipmentResult.trackingNumber);
+              } else {
+                await ProductRequest.findByIdAndUpdate(savedOrder._id, {
+                  'forzaShipping.error': shipmentResult.error
+                });
+                console.error("❌ Forza shipment failed:", shipmentResult.error);
+              }
+            } catch (forzaError) {
+              console.error("⚠️ Forza integration error:", forzaError);
             }
-        }
+          }
 
-        if (payload.shipping_address) {
-            try {
-                const updatedUser = await User.findByIdAndUpdate(
-                    req.user.id,
-                    {
-                        shipping_address: payload.shipping_address,
-                        location: payload.location,
-                    },
-                    { new: true, runValidators: true }
-                );
+          // Send order received email immediately
+          try {
+            const { orderReceivedMail } = require('../services/mailNotification');
+            const customer = await User.findById(req.user.id);
 
-                if (!updatedUser) {
-                    console.error(" User not found for ID:", req.user.id);
-                    return res.status(404).json({
-                        status: false,
-                        message: "User not found"
-                    });
-                }
-                
-            } catch (userUpdateError) {
-                console.error("⚠️ Error updating user address:", userUpdateError);
-                
+            if (customer && customer.email) {
+              await orderReceivedMail({
+                email: customer.email,
+                name: customer.firstName || 'Customer',
+                orderId: savedOrder.orderId || savedOrder._id,
+                orderTotal: savedOrder.total.toFixed(2),
+                orderDate: new Date(savedOrder.createdAt).toLocaleDateString('en-US', {
+                  month: 'short',
+                  day: 'numeric',
+                  year: 'numeric'
+                }),
+                currencySymbol: payload.currencySymbol || '$'
+              });
+              console.log("📧 Order received email sent to:", customer.email);
             }
-        }
+          } catch (emailError) {
+            console.error("⚠️ Error sending order received email:", emailError);
+          }
 
-    
-        if (payload.user && payload.pointtype === "REDEEM") {
-            try {
-                let userdata = await User.findById(payload.user);
-                if (userdata) {
-                    userdata.referalpoints = userdata.referalpoints - Number(payload.point);
-                    await userdata.save();
-                   
-                }
-            } catch (pointsError) {
-                console.error("⚠️ Error updating referral points:", pointsError);
-                
+          savedOrders.push(savedOrder);
+
+          // Send notification to seller
+          const Notification = require("@models/Notification");
+          try {
+            const notification = new Notification({
+              title: "New Order Received",
+              description: `You have received a new order #${savedOrder.orderId}. Please review and approve.`,
+              for: [sellerId],
+              type: "order",
+              orderId: savedOrder._id,
+              isRead: false
+            });
+            await notification.save();
+
+            const seller = await User.findById(sellerId);
+            if (seller && seller.email) {
+              await mailNotification.sendNotification(
+                [seller.email],
+                "New Order Received",
+                `You have received a new order #${savedOrder.orderId}. Please login to your seller panel to review and approve the order.`
+              );
             }
-        }
+          } catch (notifError) {
+            console.error("⚠️ Error sending seller notification:", notifError);
+          }
 
-      
-    
-        if (!savedOrders.length) {
-            return res.status(400).json({
-                status: false,
-                success: false,
-                message: "No orders could be created because seller information was missing on products. Please contact support.",
-            });
-        }
+          // Send notification to customer
+          try {
+            const oneSignalService = require('../services/oneSignalService');
+            const customer = await User.findById(req.user.id);
 
-        return res.status(200).json({
-            status: true,
-            success: true,
-            message: "Product request added successfully",
-            data: {
-                status: true,
-                orders: savedOrders,
-                totalOrders: savedOrders.length
+            if (customer) {
+              await oneSignalService.orderReceived(savedOrder, customer);
+              console.log("📱 Order notification sent to customer:", customer._id);
             }
-        });
+          } catch (customerNotifError) {
+            console.error("⚠️ Error sending customer notification:", customerNotifError);
+          }
 
-    } catch (error) {
-        console.error("❌ Error in createProductRequest:", error);
-        
-        // Handle duplicate PayPal order error specifically
-        if (error.code === 'DUPLICATE_PAYPAL_ORDER') {
-            console.log("🔄 Duplicate PayPal order detected, returning existing order info");
-            return res.status(200).json({
-                status: true,
-                success: true,
-                message: "Order already exists for this payment",
-                data: {
-                    status: true,
-                    existingOrderId: error.existingOrderId,
-                    isDuplicate: true
+          for (const productItem of sellerOrders[sellerId].productDetail) {
+            await Product.findByIdAndUpdate(
+              productItem.product,
+              { $inc: { sold_pieces: productItem.qty } },
+              { new: true }
+            );
+          }
+
+
+          console.log(`💰 Processing commission for seller: ${sellerId}`);
+          console.log(`💰 Payment mode: ${payload.paymentmode}`);
+          console.log(`💰 Order total: ${sellerOrders[sellerId].total}`);
+
+          // Apply commission for all payment modes (pay, cod, paypal, card)
+          if (payload.paymentmode === "pay" || payload.paymentmode === "cod" || payload.paymentmode === "paypal") {
+            const orderTotal = Number(sellerOrders[sellerId].total);
+
+            // Get seller's commission rate from database
+            const seller = await User.findById(sellerId);
+
+            if (!seller) {
+              console.error(`❌ Seller not found with ID: ${sellerId}`);
+              throw new Error(`Seller not found: ${sellerId}`);
+            }
+
+            const commissionRate = seller?.commissionRate || 15; // Default 15% if not set
+
+            const adminFee = (orderTotal * commissionRate) / 100; // Calculate dynamic admin fee
+            const sellerEarnings = orderTotal - adminFee; // Deduct admin fee from seller's earnings
+
+            console.log(`💰 Seller ID: ${sellerId}`);
+            console.log(`💰 Seller Name: ${seller.firstName} ${seller.lastName}`);
+            console.log(`💰 Seller commission rate: ${commissionRate}%`);
+            console.log(`💰 Order total: ${orderTotal}`);
+            console.log(`💰 Calculated admin fee: ${adminFee}`);
+            console.log(`💰 Calculated seller earnings: ${sellerEarnings}`);
+
+            // Update seller's wallet with the remaining amount
+            const sellerUpdate = await User.findByIdAndUpdate(
+              sellerId,
+              { $inc: { wallet: sellerEarnings } },
+              { new: true, upsert: true }
+            );
+            console.log(`💰 Seller wallet updated: ${sellerUpdate?.wallet}`);
+
+            // Find admin user and update their cash receive amount
+            const adminUser = await User.findOne({ role: 'admin' });
+            if (adminUser) {
+              const adminUpdate = await User.findByIdAndUpdate(
+                adminUser._id,
+                { $inc: { cashReceive: adminFee } },
+                { new: true }
+              );
+              console.log(`💰 Admin commission updated: ${adminUpdate?.cashReceive}`);
+            }
+
+            // Add admin fee to the order document for record keeping
+            await ProductRequest.findByIdAndUpdate(
+              savedOrder._id,
+              {
+                $set: {
+                  adminFee: adminFee,
+                  sellerEarnings: sellerEarnings,
+                  commissionRate: commissionRate
                 }
-            });
-        }
-        
-        // Handle MongoDB duplicate key error (E11000)
-        if (error.code === 11000 && error.keyPattern && error.keyPattern['paymentDetails.paypalOrderId']) {
-            console.log("🔄 MongoDB duplicate PayPal order ID detected");
-            return res.status(200).json({
-                status: true,
-                success: true,
-                message: "Order already exists for this payment",
-                data: {
-                    status: true,
-                    isDuplicate: true
-                }
-            });
-        }
-        
-        console.error("❌ Full error details:", {
-            message: error.message,
-            code: error.code,
-            stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
-        });
-        
-        if (!res.headersSent) {
-            return res.status(500).json({
-                status: false,
-                success: false,
-                message: error.message || "Internal server error",
-                error: process.env.NODE_ENV === 'development' ? error.stack : undefined
-            });
-        }
-    }
-},
-
- getTopSoldProduct: async (req, res) => {
-  try {
-    const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 12;
-    const skip = (page - 1) * limit;
-
-   
-    const cacheKey = `topSoldProducts_page${page}_limit${limit}`;
-    
-    
-    const cachedData = cache.get(cacheKey);
-    if (cachedData && (Date.now() - cachedData.timestamp) < CACHE_TTL) {
-      console.log('Returning cached top sold products');
-      return res.status(200).json(cachedData.data);
-    }
-
-   // Define the base query
-   const query = {
-     status: "verified",
-     is_verified: true,  // Only show verified products
-     sold_pieces: { $gt: 0 } 
-   };
-   
-   // For admin users, show all products regardless of verification status
-   if (req.user && req.user.role === 'admin') {
-     delete query.is_verified;
-   }
-
-    // Use aggregation pipeline for better performance
-    const products = await Product.aggregate([
-      { $match: query },
-      { $sort: { sold_pieces: -1, createdAt: -1 } }, // Sort by sold pieces, then by newest
-      { $skip: skip },
-      { $limit: limit },
-      {
-        $lookup: {
-          from: "categories",
-          localField: "category",
-          foreignField: "_id",
-          as: "category",
-          pipeline: [{ $project: { name: 1, slug: 1 } }] // Only get necessary category fields
-        }
-      },
-      {
-        $unwind: {
-          path: "$category",
-          preserveNullAndEmptyArrays: true
-        }
-      },
-      {
-        $project: {
-          name: 1,
-          slug: 1,
-          image: 1,
-          images: 1,
-          short_description: 1,
-          price_slot: 1,
-          sold_pieces: 1,
-          category: 1,
-          varients: 1,
-          is_verified: 1,
-          sponsered: 1,
-          createdAt: 1
+              }
+            );
+            console.log(`💰 Order document updated with commission data`);
+          } else {
+            console.log(`💰 Commission not applied - payment mode: ${payload.paymentmode}`);
+          }
+        } catch (orderError) {
+          console.error("❌ Error saving order for seller:", sellerId, orderError);
+          throw orderError;
         }
       }
-    ]);
 
-    // Get total count for pagination (using separate optimized query)
-    const totalProducts = await Product.countDocuments(query);
-    const totalPages = Math.ceil(totalProducts / limit);
+      if (payload.shipping_address) {
+        try {
+          const updatedUser = await User.findByIdAndUpdate(
+            req.user.id,
+            {
+              shipping_address: payload.shipping_address,
+              location: payload.location,
+            },
+            { new: true, runValidators: true }
+          );
 
-    const responseData = {
-      status: true,
-      data: products,
-      pagination: {
-        totalItems: totalProducts,
-        totalPages: totalPages,
-        currentPage: page,
-        itemsPerPage: limit,
-      },
-    };
+          if (!updatedUser) {
+            console.error(" User not found for ID:", req.user.id);
+            return res.status(404).json({
+              status: false,
+              message: "User not found"
+            });
+          }
 
-    // Cache the response data
-    cache.set(cacheKey, {
-      data: responseData,
-      timestamp: Date.now()
-    });
+        } catch (userUpdateError) {
+          console.error("⚠️ Error updating user address:", userUpdateError);
 
-    // Clean up old cache entries periodically
-    if (cache.size > 100) {
-      const oldEntries = Array.from(cache.entries())
-        .filter(([key, value]) => (Date.now() - value.timestamp) > CACHE_TTL)
-        .map(([key]) => key);
-      oldEntries.forEach(key => cache.delete(key));
+        }
+      }
+
+
+      if (payload.user && payload.pointtype === "REDEEM") {
+        try {
+          let userdata = await User.findById(payload.user);
+          if (userdata) {
+            userdata.referalpoints = userdata.referalpoints - Number(payload.point);
+            await userdata.save();
+
+          }
+        } catch (pointsError) {
+          console.error("⚠️ Error updating referral points:", pointsError);
+
+        }
+      }
+
+
+
+      if (!savedOrders.length) {
+        return res.status(400).json({
+          status: false,
+          success: false,
+          message: "No orders could be created because seller information was missing on products. Please contact support.",
+        });
+      }
+
+      return res.status(200).json({
+        status: true,
+        success: true,
+        message: "Product request added successfully",
+        data: {
+          status: true,
+          orders: savedOrders,
+          totalOrders: savedOrders.length
+        }
+      });
+
+    } catch (error) {
+      console.error("❌ Error in createProductRequest:", error);
+
+      // Handle duplicate PayPal order error specifically
+      if (error.code === 'DUPLICATE_PAYPAL_ORDER') {
+        console.log("🔄 Duplicate PayPal order detected, returning existing order info");
+        return res.status(200).json({
+          status: true,
+          success: true,
+          message: "Order already exists for this payment",
+          data: {
+            status: true,
+            existingOrderId: error.existingOrderId,
+            isDuplicate: true
+          }
+        });
+      }
+
+      // Handle MongoDB duplicate key error (E11000)
+      if (error.code === 11000 && error.keyPattern && error.keyPattern['paymentDetails.paypalOrderId']) {
+        console.log("🔄 MongoDB duplicate PayPal order ID detected");
+        return res.status(200).json({
+          status: true,
+          success: true,
+          message: "Order already exists for this payment",
+          data: {
+            status: true,
+            isDuplicate: true
+          }
+        });
+      }
+
+      console.error("❌ Full error details:", {
+        message: error.message,
+        code: error.code,
+        stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+      });
+
+      if (!res.headersSent) {
+        return res.status(500).json({
+          status: false,
+          success: false,
+          message: error.message || "Internal server error",
+          error: process.env.NODE_ENV === 'development' ? error.stack : undefined
+        });
+      }
     }
+  },
 
-    console.log('Returning fresh top sold products data');
-    return res.status(200).json(responseData);
-  } catch (error) {
-    console.error('getTopSoldProduct error:', error);
-    return response.error(res, error);
-  }
-},
+  getTopSoldProduct: async (req, res) => {
+    try {
+      const page = parseInt(req.query.page) || 1;
+      const limit = parseInt(req.query.limit) || 12;
+      const skip = (page - 1) * limit;
+
+
+      const cacheKey = `topSoldProducts_page${page}_limit${limit}`;
+
+
+      const cachedData = cache.get(cacheKey);
+      if (cachedData && (Date.now() - cachedData.timestamp) < CACHE_TTL) {
+        console.log('Returning cached top sold products');
+        return res.status(200).json(cachedData.data);
+      }
+
+      // Define the base query
+      const query = {
+        status: "verified",
+        is_verified: true,  // Only show verified products
+        sold_pieces: { $gt: 0 }
+      };
+
+      // For admin users, show all products regardless of verification status
+      if (req.user && req.user.role === 'admin') {
+        delete query.is_verified;
+      }
+
+      // Use aggregation pipeline for better performance
+      const products = await Product.aggregate([
+        { $match: query },
+        { $sort: { sold_pieces: -1, createdAt: -1 } }, // Sort by sold pieces, then by newest
+        { $skip: skip },
+        { $limit: limit },
+        {
+          $lookup: {
+            from: "categories",
+            localField: "category",
+            foreignField: "_id",
+            as: "category",
+            pipeline: [{ $project: { name: 1, slug: 1 } }] // Only get necessary category fields
+          }
+        },
+        {
+          $unwind: {
+            path: "$category",
+            preserveNullAndEmptyArrays: true
+          }
+        },
+        {
+          $project: {
+            name: 1,
+            slug: 1,
+            image: 1,
+            images: 1,
+            short_description: 1,
+            price_slot: 1,
+            sold_pieces: 1,
+            category: 1,
+            varients: 1,
+            is_verified: 1,
+            sponsered: 1,
+            createdAt: 1
+          }
+        }
+      ]);
+
+      // Get total count for pagination (using separate optimized query)
+      const totalProducts = await Product.countDocuments(query);
+      const totalPages = Math.ceil(totalProducts / limit);
+
+      const responseData = {
+        status: true,
+        data: products,
+        pagination: {
+          totalItems: totalProducts,
+          totalPages: totalPages,
+          currentPage: page,
+          itemsPerPage: limit,
+        },
+      };
+
+      // Cache the response data
+      cache.set(cacheKey, {
+        data: responseData,
+        timestamp: Date.now()
+      });
+
+      // Clean up old cache entries periodically
+      if (cache.size > 100) {
+        const oldEntries = Array.from(cache.entries())
+          .filter(([key, value]) => (Date.now() - value.timestamp) > CACHE_TTL)
+          .map(([key]) => key);
+        oldEntries.forEach(key => cache.delete(key));
+      }
+
+      console.log('Returning fresh top sold products data');
+      return res.status(200).json(responseData);
+    } catch (error) {
+      console.error('getTopSoldProduct error:', error);
+      return response.error(res, error);
+    }
+  },
 
 
   // Returns seller's wallet balance and recent earning transactions from orders
@@ -1717,10 +1724,10 @@ createProductRequest: async (req, res) => {
       }
 
       const products = await Product.aggregate([
-        { 
-          $match: { 
-            userid: new mongoose.Types.ObjectId(sellerId) 
-          } 
+        {
+          $match: {
+            userid: new mongoose.Types.ObjectId(sellerId)
+          }
         },
         { $sort: { createdAt: -1 } },
         { $skip: skip },
@@ -1848,11 +1855,13 @@ createProductRequest: async (req, res) => {
           .lean(),
         ProductRequest.aggregate([
           { $match: { adminFee: { $gt: 0 } } },
-          { $group: { 
-            _id: null, 
-            totalCommissions: { $sum: { $ifNull: ['$adminFee', 0] } }, 
-            totalOrders: { $sum: 1 } 
-          } },
+          {
+            $group: {
+              _id: null,
+              totalCommissions: { $sum: { $ifNull: ['$adminFee', 0] } },
+              totalOrders: { $sum: 1 }
+            }
+          },
         ]),
       ]);
 
@@ -2176,7 +2185,7 @@ createProductRequest: async (req, res) => {
   getSellerReturnOrderByAdmin: async (req, res) => {
     try {
       console.log('🔍 getSellerReturnOrderByAdmin called with:', req.body);
-      
+
       let cond = {};
       const { curDate, curentDate, sellerName, customerName } = req.body;
 
@@ -2264,7 +2273,7 @@ createProductRequest: async (req, res) => {
         .limit(limit);
 
       console.log('🔍 Found orders:', orders.length);
-      
+
       // Debug first order to see populated data
       if (orders.length > 0) {
         console.log('🔍 First order sample:', {
@@ -2313,7 +2322,7 @@ createProductRequest: async (req, res) => {
             if (processedOrder.user) {
               processedOrder.user.username = `${processedOrder.user.firstName || ''} ${processedOrder.user.lastName || ''}`.trim() || processedOrder.user.email;
             }
-            
+
             if (processedOrder.seller_id) {
               processedOrder.seller_id.username = `${processedOrder.seller_id.firstName || ''} ${processedOrder.seller_id.lastName || ''}`.trim() || processedOrder.seller_id.email;
             }
@@ -2355,60 +2364,60 @@ createProductRequest: async (req, res) => {
     }
   },
 
-getSellerProductByAdmin: async (req, res) => {
-  try {
-    let page = parseInt(req.query.page) || 1;
-    let limit = parseInt(req.query.limit) || 10;
-    let skip = (page - 1) * limit;
+  getSellerProductByAdmin: async (req, res) => {
+    try {
+      let page = parseInt(req.query.page) || 1;
+      let limit = parseInt(req.query.limit) || 10;
+      let skip = (page - 1) * limit;
 
-    let query = {};
+      let query = {};
 
-    // Add seller_id filter if provided
-    if (req.query.seller_id) {
-      query.userid = req.query.seller_id;
+      // Add seller_id filter if provided
+      if (req.query.seller_id) {
+        query.userid = req.query.seller_id;
+      }
+
+      // Get total count first for pagination
+      const totalProducts = await Product.countDocuments(query);
+
+      let products = await Product.find(query)
+        .populate("category")
+        .populate("userid", "-password")
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit);
+
+      // Apply search filter after populate
+      if (req.query.search) {
+        const searchRegex = new RegExp(req.query.search, "i");
+        products = products.filter(p =>
+          searchRegex.test(p.name) ||
+          searchRegex.test(p.category?.name || "") ||
+          searchRegex.test(p.userid?.username || "")
+        );
+      }
+
+      const totalPages = Math.ceil(totalProducts / limit);
+
+      return res.status(200).json({
+        status: true,
+        data: products,
+        pagination: {
+          totalItems: totalProducts,
+          totalPages: totalPages,
+          currentPage: page,
+          itemsPerPage: limit,
+        },
+      });
+    } catch (error) {
+      console.error("Error in getSellerProductByAdmin:", error);
+      return res.status(500).json({
+        status: false,
+        message: "Server error occurred",
+        error: error.message
+      });
     }
-
-    // Get total count first for pagination
-    const totalProducts = await Product.countDocuments(query);
-    
-    let products = await Product.find(query)
-      .populate("category")
-      .populate("userid", "-password")
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(limit);
-
-    // Apply search filter after populate
-    if (req.query.search) {
-      const searchRegex = new RegExp(req.query.search, "i");
-      products = products.filter(p =>
-        searchRegex.test(p.name) ||
-        searchRegex.test(p.category?.name || "") ||
-        searchRegex.test(p.userid?.username || "")
-      );
-    }
-
-    const totalPages = Math.ceil(totalProducts / limit);
-
-    return res.status(200).json({
-      status: true,
-      data: products,
-      pagination: {
-        totalItems: totalProducts,
-        totalPages: totalPages,
-        currentPage: page,
-        itemsPerPage: limit,
-      },
-    });
-  } catch (error) {
-    console.error("Error in getSellerProductByAdmin:", error);
-    return res.status(500).json({
-      status: false,
-      message: "Server error occurred",
-      error: error.message
-    });
-  }
-},
+  },
 
 
   getAssignedOrder: async (req, res) => {
@@ -2462,30 +2471,30 @@ getSellerProductByAdmin: async (req, res) => {
   changeorderstatus: async (req, res) => {
     try {
       const product = await ProductRequest.findById(req.body.id).populate('user', 'email firstName');
-      
+
       if (!product) {
         return response.error(res, { message: "Order not found" });
       }
-      
+
       const oldStatus = product.status;
       product.status = req.body.status;
-      
+
       // Import email functions
-      const { 
-        orderPreparingMail, 
-        orderShippedMail, 
-        outForDeliveryMail, 
-        orderDeliveredMail 
+      const {
+        orderPreparingMail,
+        orderShippedMail,
+        outForDeliveryMail,
+        orderDeliveredMail
       } = require('../services/mailNotification');
-      
+
       // Send emails and notifications based on status change
       if (product.user && product.user.email) {
         const customerName = product.user.firstName || 'Customer';
         const orderId = product.orderId || product._id;
-        
+
         try {
           const oneSignalService = require('../services/oneSignalService');
-          
+
           switch (req.body.status) {
             case "Preparing":
               await orderPreparingMail({
@@ -2494,11 +2503,11 @@ getSellerProductByAdmin: async (req, res) => {
                 orderId: orderId,
                 estimatedTime: '1-2 business days'
               });
-              
+
               await oneSignalService.orderStatusUpdate(product, product.user, "📦 Preparing Order", "Your order is being prepared for shipment");
               console.log("📧 Order preparing email and notification sent");
               break;
-              
+
             case "Shipped":
               await orderShippedMail({
                 email: product.user.email,
@@ -2507,11 +2516,11 @@ getSellerProductByAdmin: async (req, res) => {
                 trackingNumber: req.body.trackingNumber || 'N/A',
                 estimatedDelivery: '2-3 business days'
               });
-              
+
               await oneSignalService.orderStatusUpdate(product, product.user, "🚚 Shipped", "Your order has been shipped and is on its way");
               console.log("📧 Order shipped email and notification sent");
               break;
-              
+
             case "OutForDelivery":
               await outForDeliveryMail({
                 email: product.user.email,
@@ -2519,37 +2528,37 @@ getSellerProductByAdmin: async (req, res) => {
                 orderId: orderId,
                 deliveryTime: 'today'
               });
-              
+
               await oneSignalService.orderStatusUpdate(product, product.user, "🚴 Out for Delivery", "Your order is out for delivery and will arrive soon");
               console.log("📧 Out for delivery email and notification sent");
               break;
-              
+
             case "Delivered":
               product.onthewaytodelivery = false;
               product.deliveredAt = new Date();
-              
+
               await orderDeliveredMail({
                 email: product.user.email,
                 name: customerName,
                 orderId: orderId,
-                deliveryDate: new Date().toLocaleDateString('en-US', { 
-                  month: 'short', 
-                  day: 'numeric', 
-                  year: 'numeric' 
+                deliveryDate: new Date().toLocaleDateString('en-US', {
+                  month: 'short',
+                  day: 'numeric',
+                  year: 'numeric'
                 }),
                 proofImage: req.body.proofImage || null
               });
-              
+
               await oneSignalService.orderDelivered(product, product.user);
               console.log("📧 Order delivered email and notification sent");
-              
+
               await notify(
                 product.user._id,
                 "Pedido entregado",
                 "Tu pedido ha sido entregado exitosamente"
               );
               break;
-              
+
             case "Cancelled":
               await oneSignalService.orderCancelled(product, product.user, req.body.reason);
               console.log("📱 Order cancelled notification sent");
@@ -2559,7 +2568,7 @@ getSellerProductByAdmin: async (req, res) => {
           console.error("⚠️ Error sending status update email/notification:", emailError);
         }
       }
-      
+
       await product.save();
       return response.success(res, product);
     } catch (error) {
@@ -2867,13 +2876,13 @@ getSellerProductByAdmin: async (req, res) => {
     try {
       const { orderId } = req.params;
       console.log('Generating invoice for order:', orderId);
-      
+
       const PDFDocument = require('pdfkit');
       const path = require('path');
 
       // Fetch order details - support both _id (MongoDB ObjectId) and orderId (custom ID)
       let order;
-      
+
       // Check if orderId looks like MongoDB ObjectId (24 hex characters)
       if (orderId.match(/^[0-9a-fA-F]{24}$/)) {
         // It's a MongoDB ObjectId, use findById
@@ -2891,9 +2900,9 @@ getSellerProductByAdmin: async (req, res) => {
 
       if (!order) {
         console.log('Order not found for ID:', orderId);
-        return res.status(404).json({ 
-          success: false, 
-          message: 'Order not found' 
+        return res.status(404).json({
+          success: false,
+          message: 'Order not found'
         });
       }
 
@@ -2903,13 +2912,13 @@ getSellerProductByAdmin: async (req, res) => {
       res.setHeader('Content-Disposition', `attachment; filename="${invoiceFileName}"`);
 
       // Create PDF document and pipe directly to response
-      const doc = new PDFDocument({ 
-        margin: 50, 
+      const doc = new PDFDocument({
+        margin: 50,
         size: 'A4',
         bufferPages: true
       });
       doc.pipe(res);
-      
+
       // Try to use a font that supports Unicode currency symbols
       // PDFKit's built-in fonts don't support all Unicode characters
       try {
@@ -2919,7 +2928,7 @@ getSellerProductByAdmin: async (req, res) => {
           path.join(__dirname, '../../fonts/Roboto-Regular.ttf'),
           path.join(__dirname, '../../fonts/Arial.ttf')
         ];
-        
+
         let fontLoaded = false;
         for (const fontPath of fontOptions) {
           if (fs.existsSync(fontPath)) {
@@ -2930,7 +2939,7 @@ getSellerProductByAdmin: async (req, res) => {
             break;
           }
         }
-        
+
         if (!fontLoaded) {
           console.log('⚠️ No Unicode font found, currency symbols may not display correctly');
           console.log('💡 Download Noto Sans or Roboto font and place in merk-backend/fonts/');
@@ -2969,45 +2978,45 @@ getSellerProductByAdmin: async (req, res) => {
         .text('Bill To:', 50, 220);
 
       // Get customer name from multiple possible sources
-      const customerName = order.address?.name || 
-                          order.address?.fullName || 
-                          order.user?.name || 
-                          order.user?.firstName + ' ' + order.user?.lastName ||
-                          order.userName ||
-                          'Customer';
-      
+      const customerName = order.address?.name ||
+        order.address?.fullName ||
+        order.user?.name ||
+        order.user?.firstName + ' ' + order.user?.lastName ||
+        order.userName ||
+        'Customer';
+
       const customerAddress = order.shipping_address?.address ||
-                             order.address?.street || 
-                             order.address?.address || 
-                             order.address?.addressLine1 || 
-                             '';
-      
+        order.address?.street ||
+        order.address?.address ||
+        order.address?.addressLine1 ||
+        '';
+
       const cityStateZip = [
         order.shipping_address?.city || order.address?.city || '',
         order.shipping_address?.state || order.address?.state || '',
         order.shipping_address?.pinCode || order.address?.zipCode || order.address?.postalCode || ''
       ].filter(Boolean).join(', ');
-      
+
       const phone = order.shipping_address?.phoneNumber ||
-                   order.address?.phone || 
-                   order.address?.phoneNumber || 
-                   order.user?.phone || 
-                   '';
+        order.address?.phone ||
+        order.address?.phoneNumber ||
+        order.user?.phone ||
+        '';
 
       console.log('Customer details:', { customerName, customerAddress, cityStateZip, phone });
 
       doc.fontSize(10)
         .fillColor('#111827')
         .text(customerName, 50, 240);
-      
+
       if (customerAddress) {
         doc.text(customerAddress, 50, 255);
       }
-      
+
       if (cityStateZip) {
         doc.text(cityStateZip, 50, customerAddress ? 270 : 255);
       }
-      
+
       if (phone) {
         doc.text(phone, 50, customerAddress && cityStateZip ? 285 : (cityStateZip ? 270 : 255));
       }
@@ -3016,7 +3025,7 @@ getSellerProductByAdmin: async (req, res) => {
       const currencySymbol = order.currencySymbol || '$';
       const exchangeRate = order.exchangeRate || 1;
       const userCurrency = order.userCurrency || 'USD';
-      
+
       // Debug log for PDF generation
       console.log('📄 PDF Generation - Currency Info:', {
         orderId: order._id,
@@ -3026,14 +3035,14 @@ getSellerProductByAdmin: async (req, res) => {
         fallbackUsed: !order.userCurrency,
         orderTotal: order.total
       });
-      
+
       // Use actual currency symbol directly
       // If Unicode font is loaded, symbols like ₹, €, £ will render correctly
       // Otherwise, fallback to currency code
       const pdfSafeSymbol = currencySymbol || userCurrency || '$';
-      
+
       console.log(`🔄 Using currency symbol: "${pdfSafeSymbol}" (${userCurrency})`);
-      
+
       // Helper function to convert and format price
       const formatPrice = (priceInUSD) => {
         const converted = Math.round(priceInUSD * exchangeRate);
@@ -3072,7 +3081,7 @@ getSellerProductByAdmin: async (req, res) => {
         doc.fillColor('#111827')
           .fontSize(9)
           .text(productName, 60, yPosition, { width: 240, ellipsis: true });
-        
+
         if (item.selectedSize || item.selectedColor) {
           let variant = '';
           if (item.selectedSize) variant += `Size: ${item.selectedSize}`;
@@ -3080,7 +3089,7 @@ getSellerProductByAdmin: async (req, res) => {
           doc.fillColor('#6b7280').fontSize(7).text(`(${variant})`, 60, yPosition + 10);
           yPosition += 10;
         }
-        
+
         doc.fillColor('#111827').fontSize(9)
           .text(qty.toString(), 320, yPosition)
           .text(formatPrice(price), 380, yPosition)
@@ -3127,7 +3136,7 @@ getSellerProductByAdmin: async (req, res) => {
         .fill('#12344D');
 
       const finalTotal = itemsTotal + taxAmount + deliveryCharge;
-      
+
       doc.fontSize(12)
         .fillColor('#ffffff')
         .text('Total Amount:', summaryX, yPosition + 5)
@@ -3142,7 +3151,7 @@ getSellerProductByAdmin: async (req, res) => {
 
       // Finalize PDF - this will send the PDF directly to client
       doc.end();
-      
+
       console.log('PDF generated and sent directly to client');
 
     } catch (error) {
@@ -3181,15 +3190,15 @@ getSellerProductByAdmin: async (req, res) => {
       console.log('User making request:', req.user ? req.user.role : 'No user in request');
 
       const { id } = req.params;
-      
+
       // Find and update in one operation
       const updatedProduct = await Product.findByIdAndUpdate(
         id,
-        { 
-          $set: { 
+        {
+          $set: {
             status: "suspended",
             is_verified: false  // Ensure is_verified is set to false when suspending
-          } 
+          }
         },
         { new: true }
       );
@@ -3209,7 +3218,7 @@ getSellerProductByAdmin: async (req, res) => {
       // Clear relevant caches
       const cacheKeys = Array.from(cache.keys());
       console.log(`Clearing cache. Total cache entries: ${cacheKeys.length}`);
-      
+
       const clearedCaches = [];
       cacheKeys.forEach(key => {
         if (key.startsWith('topSoldProducts_') || key.startsWith('products_')) {
@@ -3217,7 +3226,7 @@ getSellerProductByAdmin: async (req, res) => {
           clearedCaches.push(key);
         }
       });
-      
+
       console.log(`Cleared ${clearedCaches.length} cache entries`);
       console.log('=== suspendProduct completed ===\n');
 
@@ -3228,10 +3237,10 @@ getSellerProductByAdmin: async (req, res) => {
       });
     } catch (error) {
       console.error('Error in suspendProduct:', error);
-      res.status(500).json({ 
+      res.status(500).json({
         success: false,
         message: 'Server error',
-        error: error.message 
+        error: error.message
       });
     }
   },
@@ -3381,7 +3390,7 @@ getSellerProductByAdmin: async (req, res) => {
         email: seller.email,
         orderId: orderId,
       });
-      
+
       return response.success(res, {
         message: "Reminder email sent to seller successfully",
       });
@@ -3401,8 +3410,8 @@ getSellerProductByAdmin: async (req, res) => {
       if (!id || !status || !['verified', 'suspended', 'rejected', 'pending'].includes(status)) {
         const errorMsg = `Invalid request: ${!id ? 'Missing product ID' : 'Invalid status'}`;
         console.error(errorMsg);
-        return response.error(res, { 
-          message: 'Product ID and valid status (verified/suspended/rejected/pending) are required' 
+        return response.error(res, {
+          message: 'Product ID and valid status (verified/suspended/rejected/pending) are required'
         }, 400);
       }
 
@@ -3417,7 +3426,7 @@ getSellerProductByAdmin: async (req, res) => {
 
       // Prepare update object
       const updateData = { status };
-      
+
       // Update is_verified based on status
       if (status === 'verified') {
         updateData.is_verified = true;
@@ -3451,7 +3460,7 @@ getSellerProductByAdmin: async (req, res) => {
       // Clear relevant caches
       const cacheKeys = Array.from(cache.keys());
       console.log(`Clearing cache. Total cache entries: ${cacheKeys.length}`);
-      
+
       const clearedCaches = [];
       cacheKeys.forEach(key => {
         if (key.startsWith('topSoldProducts_') || key.startsWith('products_')) {
@@ -3459,16 +3468,16 @@ getSellerProductByAdmin: async (req, res) => {
           clearedCaches.push(key);
         }
       });
-      
+
       console.log(`Cleared ${clearedCaches.length} cache entries:`, clearedCaches);
       console.log('=== updateProductStatus completed ===\n');
 
       // Clear cache for product lists
       cache.clear();
 
-      return response.success(res, { 
+      return response.success(res, {
         message: `Product ${status} successfully`,
-        product 
+        product
       });
     } catch (error) {
       console.error('Error updating product status:', error);
@@ -3479,7 +3488,7 @@ getSellerProductByAdmin: async (req, res) => {
   getProductBySale: async (req, res) => {
     try {
       const { saleId } = req.params;
-      
+
       const products = await Product.find({
         'sale.sale_id': saleId,
         'sale.is_active': true
@@ -3492,900 +3501,900 @@ getSellerProductByAdmin: async (req, res) => {
     }
   },
 
-uploadImages: async (req, res) => {
-  try {
-    console.log('=== Upload Images Request ===');
-    console.log('Request method:', req.method);
-    console.log('Content-Type:', req.headers['content-type']);
-    console.log('Authorization header present:', !!req.headers['authorization']);
-    console.log('Files received:', req.files?.length || 0);
-    console.log('Body:', req.body);
-    
-    // Log all headers for debugging
-    console.log('All headers:', JSON.stringify(req.headers, null, 2));
-    
-    if (!req.files || req.files.length === 0) {
-      console.log('ERROR: No files in request');
-      console.log('req.files:', req.files);
-      console.log('req.file:', req.file);
-      
-      // Check if multer encountered an error
-      if (req.fileValidationError) {
-        console.log('Multer validation error:', req.fileValidationError);
-        return response.error(res, { message: req.fileValidationError }, 400);
-      }
-      
-      return response.error(res, { message: 'No images uploaded. Please select images to upload.' }, 400);
-    }
-    
-    console.log('Processing', req.files.length, 'files...');
-    const imageUrls = req.files.map((file, index) => {
-      console.log(`File ${index + 1}:`, {
-        fieldname: file.fieldname,
-        originalname: file.originalname,
-        encoding: file.encoding,
-        mimetype: file.mimetype,
-        size: file.size,
-        path: file.path
-      });
-      return file.path; // Cloudinary URL
-    });
-    
-    console.log('Upload successful. Cloudinary URLs:', imageUrls);
-    
-    return response.success(res, { 
-      message: 'Images uploaded successfully',
-      images: imageUrls 
-    });
-  } catch (error) {
-    console.error('=== Upload Error ===');
-    console.error('Error name:', error.name);
-    console.error('Error message:', error.message);
-    console.error('Error stack:', error.stack);
-    
-    return response.error(res, { 
-      message: 'Failed to upload images',
-      error: error.message 
-    }, 500);
-  }
-},
-
-uploadImagesBase64: async (req, res) => {
-  try {
-    console.log('=== Upload Images Base64 Request ===');
-    const { images } = req.body;
-    
-    if (!images || images.length === 0) {
-      return response.error(res, { message: 'No images provided' }, 400);
-    }
-    
-    console.log('Processing', images.length, 'base64 images...');
-    
-    const fs = require('fs');
-    const path = require('path');
-    const uploadDir = path.join(__dirname, '../../uploads');
-    
-    // Ensure upload directory exists
-    if (!fs.existsSync(uploadDir)) {
-      fs.mkdirSync(uploadDir, { recursive: true });
-    }
-    
-    const imageUrls = [];
-    
-    for (let i = 0; i < images.length; i++) {
-      const image = images[i];
-      const base64Data = image.data.replace(/^data:image\/\w+;base64,/, '');
-      const buffer = Buffer.from(base64Data, 'base64');
-      
-      const filename = `${Date.now()}_${i}_${image.name}`;
-      const filepath = path.join(uploadDir, filename);
-      
-      fs.writeFileSync(filepath, buffer);
-      
-      // Return relative path
-      const imageUrl = `/uploads/${filename}`;
-      imageUrls.push(imageUrl);
-      
-      console.log(`Image ${i + 1} saved:`, imageUrl);
-    }
-    
-    console.log('All images uploaded successfully');
-    
-    return response.success(res, {
-      message: 'Images uploaded successfully',
-      images: imageUrls
-    });
-    
-  } catch (error) {
-    console.error('=== Upload Base64 Error ===');
-    console.error('Error:', error.message);
-    return response.error(res, {
-      message: 'Failed to upload images',
-      error: error.message
-    });
-  }
-},
-
-approveOrder: async (req, res) => {
-  try {
-    const { orderId } = req.body;
-    const sellerId = req.user.id;
-
-    const order = await ProductRequest.findById(orderId);
-
-    if (!order) {
-      return res.status(404).json({
-        status: false,
-        message: "Order not found"
-      });
-    }
-
-    if (order.seller_id.toString() !== sellerId) {
-      return res.status(403).json({
-        status: false,
-        message: "Unauthorized"
-      });
-    }
-
-    if (order.sellerApprovalStatus !== "Pending") {
-      return res.status(400).json({
-        status: false,
-        message: `Order already ${order.sellerApprovalStatus}`
-      });
-    }
-
-    order.sellerApprovalStatus = "Approved";
-    order.status = "SellerApproved";
-    order.sellerApprovedAt = new Date();
-    await order.save();
-
-    const Notification = require("@models/Notification");
-    const notification = new Notification({
-      title: "Order Approved",
-      description: `Your order #${order.orderId} has been approved and is being prepared.`,
-      for: [order.user],
-      type: "order",
-      orderId: order._id,
-      isRead: false
-    });
-    await notification.save();
-
-    const customer = await User.findById(order.user);
-    if (customer && customer.email) {
-      try {
-        await mailNotification.sendNotification(
-          [customer.email],
-          "Order Approved",
-          `Your order #${order.orderId} has been approved by the seller and is being prepared for shipment.`
-        );
-      } catch (emailError) {
-        console.error("Email notification failed:", emailError);
-      }
-    }
-
-    return res.status(200).json({
-      status: true,
-      message: "Order approved successfully",
-      data: order
-    });
-  } catch (error) {
-    console.error("Approve order error:", error);
-    return res.status(500).json({
-      status: false,
-      message: error.message || "Failed to approve order"
-    });
-  }
-},
-
-rejectOrder: async (req, res) => {
-  try {
-    const { orderId, reason } = req.body;
-    const sellerId = req.user.id;
-
-    const order = await ProductRequest.findById(orderId);
-
-    if (!order) {
-      return res.status(404).json({
-        status: false,
-        message: "Order not found"
-      });
-    }
-
-    if (order.seller_id.toString() !== sellerId) {
-      return res.status(403).json({
-        status: false,
-        message: "Unauthorized"
-      });
-    }
-
-    if (order.sellerApprovalStatus !== "Pending") {
-      return res.status(400).json({
-        status: false,
-        message: `Order already ${order.sellerApprovalStatus}`
-      });
-    }
-
-    order.sellerApprovalStatus = "Rejected";
-    order.status = "SellerRejected";
-    order.rejectionReason = reason || "Seller rejected the order";
-    await order.save();
-
-    const Notification = require("@models/Notification");
-    const notification = new Notification({
-      title: "Order Rejected",
-      description: `Your order #${order.orderId} has been rejected. ${reason || ""}`,
-      for: [order.user],
-      type: "order",
-      orderId: order._id,
-      isRead: false
-    });
-    await notification.save();
-
-    const customer = await User.findById(order.user);
-    if (customer && customer.email) {
-      try {
-        await mailNotification.sendNotification(
-          [customer.email],
-          "Order Rejected",
-          `Your order #${order.orderId} has been rejected by the seller. ${reason || ""}`
-        );
-      } catch (emailError) {
-        console.error("Email notification failed:", emailError);
-      }
-    }
-
-    return res.status(200).json({
-      status: true,
-      message: "Order rejected",
-      data: order
-    });
-  } catch (error) {
-    console.error("Reject order error:", error);
-    return res.status(500).json({
-      status: false,
-      message: error.message || "Failed to reject order"
-    });
-  }
-},
-
-getSellerPendingOrders: async (req, res) => {
-  try {
-    const sellerId = req.user.id;
-    const { status, page = 1, limit = 10 } = req.query;
-
-    console.log('🔍 getSellerPendingOrders DEBUG:', {
-      sellerId,
-      status,
-      page,
-      limit,
-      requestQuery: req.query
-    });
-
-    const query = { seller_id: sellerId };
-    
-    if (status && status !== "all") {
-      query.sellerApprovalStatus = status;
-    }
-
-    console.log('🔍 Final query:', query);
-
-    const skip = (page - 1) * limit;
-
-    // Debug: Check total orders for this seller (all statuses)
-    const allOrdersCount = await ProductRequest.countDocuments({ seller_id: sellerId });
-    console.log('🔍 Total orders for seller (all statuses):', allOrdersCount);
-
-    // Debug: Check orders by status
-    const pendingCount = await ProductRequest.countDocuments({ 
-      seller_id: sellerId, 
-      sellerApprovalStatus: "Pending" 
-    });
-    const approvedCount = await ProductRequest.countDocuments({ 
-      seller_id: sellerId, 
-      sellerApprovalStatus: "Approved" 
-    });
-    const rejectedCount = await ProductRequest.countDocuments({ 
-      seller_id: sellerId, 
-      sellerApprovalStatus: "Rejected" 
-    });
-
-    console.log('🔍 Orders by status:', {
-      pending: pendingCount,
-      approved: approvedCount,
-      rejected: rejectedCount,
-      total: allOrdersCount
-    });
-
-    const orders = await ProductRequest.find(query)
-      .populate("user", "firstName lastName email number")
-      .populate("productDetail.product", "name images price_slot")
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(parseInt(limit));
-
-    const totalOrders = await ProductRequest.countDocuments(query);
-
-  
-    const orderSample = orders.slice(0, 3).map(order => ({
-      orderId: order.orderId,
-      sellerApprovalStatus: order.sellerApprovalStatus,
-      status: order.status,
-      createdAt: order.createdAt
-    }));
-  
-
-    return res.status(200).json({
-      status: true,
-      data: orders,
-      pagination: {
-        total: totalOrders,
-        page: parseInt(page),
-        limit: parseInt(limit),
-        totalPages: Math.ceil(totalOrders / limit)
-      }
-    });
-  } catch (error) {
-    console.error("Get seller orders error:", error);
-    return res.status(500).json({
-      status: false,
-      message: error.message || "Failed to fetch orders"
-    });
-  }
-},
-
-// Send OneSignal notification manually
-sendNotification: async (req, res) => {
-  try {
-    const { userIds, title, message, data } = req.body;
-
-    if (!userIds || !title || !message) {
-      return response.error(res, { message: "User IDs, title, and message are required" });
-    }
-
-    const result = await oneSignalService.sendNotification(userIds, title, message, data);
-
-    return response.success(res, {
-      message: 'Notification sent successfully',
-      result: result
-    });
-
-  } catch (error) {
-    console.error('Manual notification error:', error);
-    return response.error(res, error);
-  }
-},
-
-// Get OneSignal notification history for an order
-getNotificationHistory: async (req, res) => {
-  try {
-    const { orderId } = req.params;
-
-    const order = await ProductRequest.findById(orderId).select('orderId oneSignalNotifications');
-
-    if (!order) {
-      return response.error(res, { message: "Order not found" });
-    }
-
-    return response.success(res, {
-      orderId: order.orderId,
-      notifications: order.oneSignalNotifications || []
-    });
-
-  } catch (error) {
-    return response.error(res, error);
-  }
-},
-
-testNotification: async (req, res) => {
-  try {
-    console.log('🧪 Test notification API called');
-    console.log('👤 User:', req.user);
-    console.log('📦 Request body:', req.body);
-    
-    const { userId, title, message } = req.body;
-    
-    if (!userId || !title || !message) {
-      return res.status(400).json({
-        success: false,
-        message: 'Missing required fields: userId, title, message'
-      });
-    }
-    
-    // Get user from database
-    const User = require('@models/User');
-    const user = await User.findById(userId);
-    
-    if (!user) {
-      return res.status(404).json({
-        success: false,
-        message: 'User not found'
-      });
-    }
-    
-    // Send test notification using OneSignal service
-    const oneSignalService = require('../services/oneSignalService');
-    
-    const result = await oneSignalService.sendNotification(
-      [userId],
-      title,
-      message,
-      { type: 'test', timestamp: new Date().toISOString() }
-    );
-    
-    console.log('📱 Test notification result:', result);
-    
-    if (result.success) {
-      return res.status(200).json({
-        success: true,
-        message: 'Test notification sent successfully!',
-        data: result.data
-      });
-    } else {
-      return res.status(500).json({
-        success: false,
-        message: 'Failed to send test notification',
-        error: result.error
-      });
-    }
-    
-  } catch (error) {
-    console.error('❌ Test notification error:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Internal server error',
-      error: error.message
-    });
-  }
-},
-
-// Test function to create a delivered order for testing return functionality
-createTestDeliveredOrder: async (req, res) => {
-  try {
-    if (!req.user || req.user.role !== 'admin') {
-      return response.error(res, { message: "Admin access required" });
-    }
-
-    // Find a user and a product for testing
-    const user = await User.findOne({ role: 'user' }).limit(1);
-    const product = await Product.findOne({ is_verified: true }).limit(1);
-
-    if (!user || !product) {
-      return response.error(res, { message: "Need at least one user and one product to create test order" });
-    }
-
-    const testOrder = new ProductRequest({
-      user: user._id,
-      seller_id: product.userid,
-      status: "Delivered",
-      orderId: `TEST-${Date.now()}`,
-      productDetail: [{
-        product: product._id,
-        image: product.images || ['https://via.placeholder.com/150'],
-        qty: 1,
-        price: product.price_slot?.[0]?.our_price || 100,
-        price_slot: product.price_slot || [{ price: 100, our_price: 100 }],
-        isReturnable: true
-      }],
-      shipping_address: {
-        name: user.firstName || 'Test User',
-        address: '123 Test Street',
-        city: 'Test City',
-        phone: '1234567890'
-      },
-      total: product.price_slot?.[0]?.our_price || 100,
-      paymentmode: 'test',
-      createdAt: new Date(),
-      updatedAt: new Date()
-    });
-
-    const savedOrder = await testOrder.save();
-    
-    return response.success(res, {
-      message: "Test delivered order created successfully",
-      order: savedOrder,
-      instructions: "You can now test return functionality with this order"
-    });
-
-  } catch (error) {
-    console.error('Error creating test order:', error);
-    return response.error(res, error);
-  }
-},
-
-// Send notification to seller about return request
-sendReturnNotificationToSeller: async (req, res) => {
-  try {
-    const { orderId } = req.body;
-
-    if (!orderId) {
-      return response.error(res, { message: "Order ID is required" });
-    }
-
-    // Find the order
-    const order = await ProductRequest.findById(orderId)
-      .populate('user', 'firstName lastName email')
-      .populate('seller_id', 'firstName lastName email');
-
-    if (!order) {
-      return response.error(res, { message: "Order not found" });
-    }
-
-    if (!order.seller_id) {
-      return response.error(res, { message: "Seller not found for this order" });
-    }
-
-    // Send notification to seller
-    const sellerName = `${order.seller_id.firstName || ''} ${order.seller_id.lastName || ''}`.trim() || order.seller_id.email;
-    const customerName = `${order.user.firstName || ''} ${order.user.lastName || ''}`.trim() || order.user.email;
-    
-    const notificationMessage = `Return request received for order ${order.orderId || order._id} from customer ${customerName}. Please review and take action.`;
-
+  uploadImages: async (req, res) => {
     try {
-      await oneSignalService.sendNotification(
-        [order.seller_id._id.toString()],
-        `Return Request - Order ${order.orderId || order._id}`,
-        notificationMessage,
-        {
-          orderId: order.orderId || order._id,
-          type: 'return_notification',
-          customerName: customerName
-        }
-      );
+      console.log('=== Upload Images Request ===');
+      console.log('Request method:', req.method);
+      console.log('Content-Type:', req.headers['content-type']);
+      console.log('Authorization header present:', !!req.headers['authorization']);
+      console.log('Files received:', req.files?.length || 0);
+      console.log('Body:', req.body);
 
-      console.log(`📧 Return notification sent to seller: ${sellerName} for order: ${order.orderId}`);
+      // Log all headers for debugging
+      console.log('All headers:', JSON.stringify(req.headers, null, 2));
+
+      if (!req.files || req.files.length === 0) {
+        console.log('ERROR: No files in request');
+        console.log('req.files:', req.files);
+        console.log('req.file:', req.file);
+
+        // Check if multer encountered an error
+        if (req.fileValidationError) {
+          console.log('Multer validation error:', req.fileValidationError);
+          return response.error(res, { message: req.fileValidationError }, 400);
+        }
+
+        return response.error(res, { message: 'No images uploaded. Please select images to upload.' }, 400);
+      }
+
+      console.log('Processing', req.files.length, 'files...');
+      const imageUrls = req.files.map((file, index) => {
+        console.log(`File ${index + 1}:`, {
+          fieldname: file.fieldname,
+          originalname: file.originalname,
+          encoding: file.encoding,
+          mimetype: file.mimetype,
+          size: file.size,
+          path: file.path
+        });
+        return file.path; // Cloudinary URL
+      });
+
+      console.log('Upload successful. Cloudinary URLs:', imageUrls);
 
       return response.success(res, {
-        message: `Return notification sent successfully to seller ${sellerName}`,
-        orderId: order.orderId || order._id,
-        sellerName: sellerName
+        message: 'Images uploaded successfully',
+        images: imageUrls
+      });
+    } catch (error) {
+      console.error('=== Upload Error ===');
+      console.error('Error name:', error.name);
+      console.error('Error message:', error.message);
+      console.error('Error stack:', error.stack);
+
+      return response.error(res, {
+        message: 'Failed to upload images',
+        error: error.message
+      }, 500);
+    }
+  },
+
+  uploadImagesBase64: async (req, res) => {
+    try {
+      console.log('=== Upload Images Base64 Request ===');
+      const { images } = req.body;
+
+      if (!images || images.length === 0) {
+        return response.error(res, { message: 'No images provided' }, 400);
+      }
+
+      console.log('Processing', images.length, 'base64 images...');
+
+      const fs = require('fs');
+      const path = require('path');
+      const uploadDir = path.join(__dirname, '../../uploads');
+
+      // Ensure upload directory exists
+      if (!fs.existsSync(uploadDir)) {
+        fs.mkdirSync(uploadDir, { recursive: true });
+      }
+
+      const imageUrls = [];
+
+      for (let i = 0; i < images.length; i++) {
+        const image = images[i];
+        const base64Data = image.data.replace(/^data:image\/\w+;base64,/, '');
+        const buffer = Buffer.from(base64Data, 'base64');
+
+        const filename = `${Date.now()}_${i}_${image.name}`;
+        const filepath = path.join(uploadDir, filename);
+
+        fs.writeFileSync(filepath, buffer);
+
+        // Return relative path
+        const imageUrl = `/uploads/${filename}`;
+        imageUrls.push(imageUrl);
+
+        console.log(`Image ${i + 1} saved:`, imageUrl);
+      }
+
+      console.log('All images uploaded successfully');
+
+      return response.success(res, {
+        message: 'Images uploaded successfully',
+        images: imageUrls
       });
 
-    } catch (notifError) {
-      console.error('Error sending notification to seller:', notifError);
-      return response.error(res, { message: "Failed to send notification to seller" });
+    } catch (error) {
+      console.error('=== Upload Base64 Error ===');
+      console.error('Error:', error.message);
+      return response.error(res, {
+        message: 'Failed to upload images',
+        error: error.message
+      });
     }
+  },
 
-  } catch (error) {
-    console.error('Error in sendReturnNotificationToSeller:', error);
-    return response.error(res, error);
-  }
-},
-
-// Update return order status (admin action)
-updateReturnOrderStatus: async (req, res) => {
-  try {
-    const { orderId, status } = req.body;
-
-    if (!orderId || !status) {
-      return response.error(res, { message: "Order ID and status are required" });
-    }
-
-    // Validate status
-    const validStatuses = ['Returned', 'Refunded', 'Return Rejected'];
-    if (!validStatuses.includes(status)) {
-      return response.error(res, { message: "Invalid status. Valid statuses: " + validStatuses.join(', ') });
-    }
-
-    // Find and update the order
-    const updatedOrder = await ProductRequest.findByIdAndUpdate(
-      orderId,
-      { 
-        status: status,
-        returnProcessedAt: new Date(),
-        returnProcessedBy: req.user.id
-      },
-      { new: true }
-    ).populate('user', 'firstName lastName email');
-
-    if (!updatedOrder) {
-      return response.error(res, { message: "Order not found" });
-    }
-
-    // Send notification to customer
-    const customerName = `${updatedOrder.user.firstName || ''} ${updatedOrder.user.lastName || ''}`.trim() || updatedOrder.user.email;
-    const notificationMessage = `Your return request for order ${updatedOrder.orderId || updatedOrder._id} has been processed. Status: ${status}`;
-
+  approveOrder: async (req, res) => {
     try {
-      await oneSignalService.sendNotification(
-        [updatedOrder.user._id.toString()],
-        `Return Status Update - ${status}`,
-        notificationMessage,
-        {
-          orderId: updatedOrder.orderId || updatedOrder._id,
-          type: 'return_status_update',
-          status: status
+      const { orderId } = req.body;
+      const sellerId = req.user.id;
+
+      const order = await ProductRequest.findById(orderId);
+
+      if (!order) {
+        return res.status(404).json({
+          status: false,
+          message: "Order not found"
+        });
+      }
+
+      if (order.seller_id.toString() !== sellerId) {
+        return res.status(403).json({
+          status: false,
+          message: "Unauthorized"
+        });
+      }
+
+      if (order.sellerApprovalStatus !== "Pending") {
+        return res.status(400).json({
+          status: false,
+          message: `Order already ${order.sellerApprovalStatus}`
+        });
+      }
+
+      order.sellerApprovalStatus = "Approved";
+      order.status = "SellerApproved";
+      order.sellerApprovedAt = new Date();
+      await order.save();
+
+      const Notification = require("@models/Notification");
+      const notification = new Notification({
+        title: "Order Approved",
+        description: `Your order #${order.orderId} has been approved and is being prepared.`,
+        for: [order.user],
+        type: "order",
+        orderId: order._id,
+        isRead: false
+      });
+      await notification.save();
+
+      const customer = await User.findById(order.user);
+      if (customer && customer.email) {
+        try {
+          await mailNotification.sendNotification(
+            [customer.email],
+            "Order Approved",
+            `Your order #${order.orderId} has been approved by the seller and is being prepared for shipment.`
+          );
+        } catch (emailError) {
+          console.error("Email notification failed:", emailError);
         }
+      }
+
+      return res.status(200).json({
+        status: true,
+        message: "Order approved successfully",
+        data: order
+      });
+    } catch (error) {
+      console.error("Approve order error:", error);
+      return res.status(500).json({
+        status: false,
+        message: error.message || "Failed to approve order"
+      });
+    }
+  },
+
+  rejectOrder: async (req, res) => {
+    try {
+      const { orderId, reason } = req.body;
+      const sellerId = req.user.id;
+
+      const order = await ProductRequest.findById(orderId);
+
+      if (!order) {
+        return res.status(404).json({
+          status: false,
+          message: "Order not found"
+        });
+      }
+
+      if (order.seller_id.toString() !== sellerId) {
+        return res.status(403).json({
+          status: false,
+          message: "Unauthorized"
+        });
+      }
+
+      if (order.sellerApprovalStatus !== "Pending") {
+        return res.status(400).json({
+          status: false,
+          message: `Order already ${order.sellerApprovalStatus}`
+        });
+      }
+
+      order.sellerApprovalStatus = "Rejected";
+      order.status = "SellerRejected";
+      order.rejectionReason = reason || "Seller rejected the order";
+      await order.save();
+
+      const Notification = require("@models/Notification");
+      const notification = new Notification({
+        title: "Order Rejected",
+        description: `Your order #${order.orderId} has been rejected. ${reason || ""}`,
+        for: [order.user],
+        type: "order",
+        orderId: order._id,
+        isRead: false
+      });
+      await notification.save();
+
+      const customer = await User.findById(order.user);
+      if (customer && customer.email) {
+        try {
+          await mailNotification.sendNotification(
+            [customer.email],
+            "Order Rejected",
+            `Your order #${order.orderId} has been rejected by the seller. ${reason || ""}`
+          );
+        } catch (emailError) {
+          console.error("Email notification failed:", emailError);
+        }
+      }
+
+      return res.status(200).json({
+        status: true,
+        message: "Order rejected",
+        data: order
+      });
+    } catch (error) {
+      console.error("Reject order error:", error);
+      return res.status(500).json({
+        status: false,
+        message: error.message || "Failed to reject order"
+      });
+    }
+  },
+
+  getSellerPendingOrders: async (req, res) => {
+    try {
+      const sellerId = req.user.id;
+      const { status, page = 1, limit = 10 } = req.query;
+
+      console.log('🔍 getSellerPendingOrders DEBUG:', {
+        sellerId,
+        status,
+        page,
+        limit,
+        requestQuery: req.query
+      });
+
+      const query = { seller_id: sellerId };
+
+      if (status && status !== "all") {
+        query.sellerApprovalStatus = status;
+      }
+
+      console.log('🔍 Final query:', query);
+
+      const skip = (page - 1) * limit;
+
+      // Debug: Check total orders for this seller (all statuses)
+      const allOrdersCount = await ProductRequest.countDocuments({ seller_id: sellerId });
+      console.log('🔍 Total orders for seller (all statuses):', allOrdersCount);
+
+      // Debug: Check orders by status
+      const pendingCount = await ProductRequest.countDocuments({
+        seller_id: sellerId,
+        sellerApprovalStatus: "Pending"
+      });
+      const approvedCount = await ProductRequest.countDocuments({
+        seller_id: sellerId,
+        sellerApprovalStatus: "Approved"
+      });
+      const rejectedCount = await ProductRequest.countDocuments({
+        seller_id: sellerId,
+        sellerApprovalStatus: "Rejected"
+      });
+
+      console.log('🔍 Orders by status:', {
+        pending: pendingCount,
+        approved: approvedCount,
+        rejected: rejectedCount,
+        total: allOrdersCount
+      });
+
+      const orders = await ProductRequest.find(query)
+        .populate("user", "firstName lastName email number")
+        .populate("productDetail.product", "name images price_slot")
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(parseInt(limit));
+
+      const totalOrders = await ProductRequest.countDocuments(query);
+
+
+      const orderSample = orders.slice(0, 3).map(order => ({
+        orderId: order.orderId,
+        sellerApprovalStatus: order.sellerApprovalStatus,
+        status: order.status,
+        createdAt: order.createdAt
+      }));
+
+
+      return res.status(200).json({
+        status: true,
+        data: orders,
+        pagination: {
+          total: totalOrders,
+          page: parseInt(page),
+          limit: parseInt(limit),
+          totalPages: Math.ceil(totalOrders / limit)
+        }
+      });
+    } catch (error) {
+      console.error("Get seller orders error:", error);
+      return res.status(500).json({
+        status: false,
+        message: error.message || "Failed to fetch orders"
+      });
+    }
+  },
+
+  // Send OneSignal notification manually
+  sendNotification: async (req, res) => {
+    try {
+      const { userIds, title, message, data } = req.body;
+
+      if (!userIds || !title || !message) {
+        return response.error(res, { message: "User IDs, title, and message are required" });
+      }
+
+      const result = await oneSignalService.sendNotification(userIds, title, message, data);
+
+      return response.success(res, {
+        message: 'Notification sent successfully',
+        result: result
+      });
+
+    } catch (error) {
+      console.error('Manual notification error:', error);
+      return response.error(res, error);
+    }
+  },
+
+  // Get OneSignal notification history for an order
+  getNotificationHistory: async (req, res) => {
+    try {
+      const { orderId } = req.params;
+
+      const order = await ProductRequest.findById(orderId).select('orderId oneSignalNotifications');
+
+      if (!order) {
+        return response.error(res, { message: "Order not found" });
+      }
+
+      return response.success(res, {
+        orderId: order.orderId,
+        notifications: order.oneSignalNotifications || []
+      });
+
+    } catch (error) {
+      return response.error(res, error);
+    }
+  },
+
+  testNotification: async (req, res) => {
+    try {
+      console.log('🧪 Test notification API called');
+      console.log('👤 User:', req.user);
+      console.log('📦 Request body:', req.body);
+
+      const { userId, title, message } = req.body;
+
+      if (!userId || !title || !message) {
+        return res.status(400).json({
+          success: false,
+          message: 'Missing required fields: userId, title, message'
+        });
+      }
+
+      // Get user from database
+      const User = require('@models/User');
+      const user = await User.findById(userId);
+
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          message: 'User not found'
+        });
+      }
+
+      // Send test notification using OneSignal service
+      const oneSignalService = require('../services/oneSignalService');
+
+      const result = await oneSignalService.sendNotification(
+        [userId],
+        title,
+        message,
+        { type: 'test', timestamp: new Date().toISOString() }
       );
 
-      console.log(`📧 Return status notification sent to customer: ${customerName} for order: ${updatedOrder.orderId}`);
-    } catch (notifError) {
-      console.error('Error sending notification to customer:', notifError);
-    }
+      console.log('📱 Test notification result:', result);
 
-    return response.success(res, {
-      message: `Order status updated to ${status} successfully`,
-      orderId: updatedOrder.orderId || updatedOrder._id,
-      status: status,
-      customerName: customerName
-    });
+      if (result.success) {
+        return res.status(200).json({
+          success: true,
+          message: 'Test notification sent successfully!',
+          data: result.data
+        });
+      } else {
+        return res.status(500).json({
+          success: false,
+          message: 'Failed to send test notification',
+          error: result.error
+        });
+      }
 
-  } catch (error) {
-    console.error('Error in updateReturnOrderStatus:', error);
-    return response.error(res, error);
-  }
-},
-
-// Update return status for individual products (admin/seller action)
-updateReturnStatus: async (req, res) => {
-  try {
-    const { orderId, productId, status } = req.body;
-
-    if (!orderId || !status) {
-      return response.error(res, { message: "Order ID and status are required" });
-    }
-
-    // Validate status
-    const validStatuses = ['Approved', 'Rejected', 'Refunded'];
-    if (!validStatuses.includes(status)) {
-      return response.error(res, { message: "Invalid status. Valid statuses: " + validStatuses.join(', ') });
-    }
-
-    // Find the order by orderId field (not _id)
-    const order = await ProductRequest.findOne({ 
-      $or: [
-        { orderId: orderId },
-        { _id: orderId.match(/^[0-9a-fA-F]{24}$/) ? orderId : null }
-      ]
-    }).populate('user', 'firstName lastName email');
-
-    if (!order) {
-      return response.error(res, { message: "Order not found" });
-    }
-
-    // Update the specific product's return status
-    let updated = false;
-    if (productId) {
-      // Update specific product
-      order.productDetail.forEach(product => {
-        if (product._id.toString() === productId) {
-          if (!product.returnDetails) {
-            product.returnDetails = {};
-          }
-          product.returnDetails.returnStatus = status;
-          product.returnDetails.processedAt = new Date();
-          product.returnDetails.processedBy = req.user.id;
-          
-          // If approved, mark as returned
-          if (status === 'Approved') {
-            product.returnDetails.isReturned = true;
-          }
-          // If refunded, mark as refunded
-          if (status === 'Refunded') {
-            product.returnDetails.isRefunded = true;
-            product.returnDetails.refundedAt = new Date();
-          }
-          
-          updated = true;
-        }
+    } catch (error) {
+      console.error('❌ Test notification error:', error);
+      return res.status(500).json({
+        success: false,
+        message: 'Internal server error',
+        error: error.message
       });
-    } else {
-      // Update all products in the order that have return requests
+    }
+  },
+
+  // Test function to create a delivered order for testing return functionality
+  createTestDeliveredOrder: async (req, res) => {
+    try {
+      if (!req.user || req.user.role !== 'admin') {
+        return response.error(res, { message: "Admin access required" });
+      }
+
+      // Find a user and a product for testing
+      const user = await User.findOne({ role: 'user' }).limit(1);
+      const product = await Product.findOne({ is_verified: true }).limit(1);
+
+      if (!user || !product) {
+        return response.error(res, { message: "Need at least one user and one product to create test order" });
+      }
+
+      const testOrder = new ProductRequest({
+        user: user._id,
+        seller_id: product.userid,
+        status: "Delivered",
+        orderId: `TEST-${Date.now()}`,
+        productDetail: [{
+          product: product._id,
+          image: product.images || ['https://via.placeholder.com/150'],
+          qty: 1,
+          price: product.price_slot?.[0]?.our_price || 100,
+          price_slot: product.price_slot || [{ price: 100, our_price: 100 }],
+          isReturnable: true
+        }],
+        shipping_address: {
+          name: user.firstName || 'Test User',
+          address: '123 Test Street',
+          city: 'Test City',
+          phone: '1234567890'
+        },
+        total: product.price_slot?.[0]?.our_price || 100,
+        paymentmode: 'test',
+        createdAt: new Date(),
+        updatedAt: new Date()
+      });
+
+      const savedOrder = await testOrder.save();
+
+      return response.success(res, {
+        message: "Test delivered order created successfully",
+        order: savedOrder,
+        instructions: "You can now test return functionality with this order"
+      });
+
+    } catch (error) {
+      console.error('Error creating test order:', error);
+      return response.error(res, error);
+    }
+  },
+
+  // Send notification to seller about return request
+  sendReturnNotificationToSeller: async (req, res) => {
+    try {
+      const { orderId } = req.body;
+
+      if (!orderId) {
+        return response.error(res, { message: "Order ID is required" });
+      }
+
+      // Find the order
+      const order = await ProductRequest.findById(orderId)
+        .populate('user', 'firstName lastName email')
+        .populate('seller_id', 'firstName lastName email');
+
+      if (!order) {
+        return response.error(res, { message: "Order not found" });
+      }
+
+      if (!order.seller_id) {
+        return response.error(res, { message: "Seller not found for this order" });
+      }
+
+      // Send notification to seller
+      const sellerName = `${order.seller_id.firstName || ''} ${order.seller_id.lastName || ''}`.trim() || order.seller_id.email;
+      const customerName = `${order.user.firstName || ''} ${order.user.lastName || ''}`.trim() || order.user.email;
+
+      const notificationMessage = `Return request received for order ${order.orderId || order._id} from customer ${customerName}. Please review and take action.`;
+
+      try {
+        await oneSignalService.sendNotification(
+          [order.seller_id._id.toString()],
+          `Return Request - Order ${order.orderId || order._id}`,
+          notificationMessage,
+          {
+            orderId: order.orderId || order._id,
+            type: 'return_notification',
+            customerName: customerName
+          }
+        );
+
+        console.log(`📧 Return notification sent to seller: ${sellerName} for order: ${order.orderId}`);
+
+        return response.success(res, {
+          message: `Return notification sent successfully to seller ${sellerName}`,
+          orderId: order.orderId || order._id,
+          sellerName: sellerName
+        });
+
+      } catch (notifError) {
+        console.error('Error sending notification to seller:', notifError);
+        return response.error(res, { message: "Failed to send notification to seller" });
+      }
+
+    } catch (error) {
+      console.error('Error in sendReturnNotificationToSeller:', error);
+      return response.error(res, error);
+    }
+  },
+
+  // Update return order status (admin action)
+  updateReturnOrderStatus: async (req, res) => {
+    try {
+      const { orderId, status } = req.body;
+
+      if (!orderId || !status) {
+        return response.error(res, { message: "Order ID and status are required" });
+      }
+
+      // Validate status
+      const validStatuses = ['Returned', 'Refunded', 'Return Rejected'];
+      if (!validStatuses.includes(status)) {
+        return response.error(res, { message: "Invalid status. Valid statuses: " + validStatuses.join(', ') });
+      }
+
+      // Find and update the order
+      const updatedOrder = await ProductRequest.findByIdAndUpdate(
+        orderId,
+        {
+          status: status,
+          returnProcessedAt: new Date(),
+          returnProcessedBy: req.user.id
+        },
+        { new: true }
+      ).populate('user', 'firstName lastName email');
+
+      if (!updatedOrder) {
+        return response.error(res, { message: "Order not found" });
+      }
+
+      // Send notification to customer
+      const customerName = `${updatedOrder.user.firstName || ''} ${updatedOrder.user.lastName || ''}`.trim() || updatedOrder.user.email;
+      const notificationMessage = `Your return request for order ${updatedOrder.orderId || updatedOrder._id} has been processed. Status: ${status}`;
+
+      try {
+        await oneSignalService.sendNotification(
+          [updatedOrder.user._id.toString()],
+          `Return Status Update - ${status}`,
+          notificationMessage,
+          {
+            orderId: updatedOrder.orderId || updatedOrder._id,
+            type: 'return_status_update',
+            status: status
+          }
+        );
+
+        console.log(`📧 Return status notification sent to customer: ${customerName} for order: ${updatedOrder.orderId}`);
+      } catch (notifError) {
+        console.error('Error sending notification to customer:', notifError);
+      }
+
+      return response.success(res, {
+        message: `Order status updated to ${status} successfully`,
+        orderId: updatedOrder.orderId || updatedOrder._id,
+        status: status,
+        customerName: customerName
+      });
+
+    } catch (error) {
+      console.error('Error in updateReturnOrderStatus:', error);
+      return response.error(res, error);
+    }
+  },
+
+  // Update return status for individual products (admin/seller action)
+  updateReturnStatus: async (req, res) => {
+    try {
+      const { orderId, productId, status } = req.body;
+
+      if (!orderId || !status) {
+        return response.error(res, { message: "Order ID and status are required" });
+      }
+
+      // Validate status
+      const validStatuses = ['Approved', 'Rejected', 'Refunded'];
+      if (!validStatuses.includes(status)) {
+        return response.error(res, { message: "Invalid status. Valid statuses: " + validStatuses.join(', ') });
+      }
+
+      // Find the order by orderId field (not _id)
+      const order = await ProductRequest.findOne({
+        $or: [
+          { orderId: orderId },
+          { _id: orderId.match(/^[0-9a-fA-F]{24}$/) ? orderId : null }
+        ]
+      }).populate('user', 'firstName lastName email');
+
+      if (!order) {
+        return response.error(res, { message: "Order not found" });
+      }
+
+      // Update the specific product's return status
+      let updated = false;
+      if (productId) {
+        // Update specific product
+        order.productDetail.forEach(product => {
+          if (product._id.toString() === productId) {
+            if (!product.returnDetails) {
+              product.returnDetails = {};
+            }
+            product.returnDetails.returnStatus = status;
+            product.returnDetails.processedAt = new Date();
+            product.returnDetails.processedBy = req.user.id;
+
+            // If approved, mark as returned
+            if (status === 'Approved') {
+              product.returnDetails.isReturned = true;
+            }
+            // If refunded, mark as refunded
+            if (status === 'Refunded') {
+              product.returnDetails.isRefunded = true;
+              product.returnDetails.refundedAt = new Date();
+            }
+
+            updated = true;
+          }
+        });
+      } else {
+        // Update all products in the order that have return requests
+        order.productDetail.forEach(product => {
+          if (product.returnDetails && product.returnDetails.returnStatus) {
+            product.returnDetails.returnStatus = status;
+            product.returnDetails.processedAt = new Date();
+            product.returnDetails.processedBy = req.user.id;
+
+            // If approved, mark as returned
+            if (status === 'Approved') {
+              product.returnDetails.isReturned = true;
+            }
+            // If refunded, mark as refunded
+            if (status === 'Refunded') {
+              product.returnDetails.isRefunded = true;
+              product.returnDetails.refundedAt = new Date();
+            }
+
+            updated = true;
+          }
+        });
+      }
+
+      if (!updated) {
+        return response.error(res, { message: "No return request found for the specified product" });
+      }
+
+      // Check if all products in the order have been approved for return
+      let allProductsReturned = true;
+      let anyProductRejected = false;
+
       order.productDetail.forEach(product => {
         if (product.returnDetails && product.returnDetails.returnStatus) {
-          product.returnDetails.returnStatus = status;
-          product.returnDetails.processedAt = new Date();
-          product.returnDetails.processedBy = req.user.id;
-          
-          // If approved, mark as returned
-          if (status === 'Approved') {
-            product.returnDetails.isReturned = true;
+          // Check if any product is rejected
+          if (product.returnDetails.returnStatus === 'Rejected') {
+            anyProductRejected = true;
           }
-          // If refunded, mark as refunded
-          if (status === 'Refunded') {
-            product.returnDetails.isRefunded = true;
-            product.returnDetails.refundedAt = new Date();
+          // If any product is not approved/refunded, then order is not fully returned
+          if (!['Approved', 'Refunded'].includes(product.returnDetails.returnStatus)) {
+            allProductsReturned = false;
           }
-          
-          updated = true;
-        }
-      });
-    }
-
-    if (!updated) {
-      return response.error(res, { message: "No return request found for the specified product" });
-    }
-
-    // Check if all products in the order have been approved for return
-    let allProductsReturned = true;
-    let anyProductRejected = false;
-    
-    order.productDetail.forEach(product => {
-      if (product.returnDetails && product.returnDetails.returnStatus) {
-        // Check if any product is rejected
-        if (product.returnDetails.returnStatus === 'Rejected') {
-          anyProductRejected = true;
-        }
-        // If any product is not approved/refunded, then order is not fully returned
-        if (!['Approved', 'Refunded'].includes(product.returnDetails.returnStatus)) {
+        } else {
+          // If product doesn't have return request, it's not returned
           allProductsReturned = false;
         }
-      } else {
-        // If product doesn't have return request, it's not returned
-        allProductsReturned = false;
+      });
+
+      // Update main order status based on return decisions
+      if (allProductsReturned && status === 'Approved') {
+        order.status = 'Returned';
+      } else if (status === 'Rejected' || anyProductRejected) {
+        // If return is rejected, set status back to "Delivered" (assuming it was delivered before return request)
+        order.status = 'Delivered';
       }
-    });
 
-    // Update main order status based on return decisions
-    if (allProductsReturned && status === 'Approved') {
-      order.status = 'Returned';
-    } else if (status === 'Rejected' || anyProductRejected) {
-      // If return is rejected, set status back to "Delivered" (assuming it was delivered before return request)
-      order.status = 'Delivered';
+      // Save the updated order (using markModified to ensure nested changes are saved)
+      order.markModified('productDetail');
+      await order.save({ validateBeforeSave: false });
+
+      // Send notification to customer
+      const customerName = `${order.user.firstName || ''} ${order.user.lastName || ''}`.trim() || order.user.email;
+      const notificationMessage = `Your return request for order ${order.orderId || order._id} has been ${status.toLowerCase()}`;
+
+      try {
+        await oneSignalService.sendNotification(
+          [order.user._id.toString()],
+          `Return Request ${status}`,
+          notificationMessage,
+          {
+            orderId: order.orderId || order._id,
+            type: 'return_status_update',
+            status: status
+          }
+        );
+
+        console.log(`📧 Return status notification sent to customer: ${customerName} for order: ${order.orderId}`);
+      } catch (notifError) {
+        console.error('Error sending notification to customer:', notifError);
+      }
+
+      return response.success(res, {
+        message: `Return request ${status.toLowerCase()} successfully`,
+        orderId: order.orderId || order._id,
+        status: status,
+        customerName: customerName
+      });
+
+    } catch (error) {
+      console.error('Error in updateReturnStatus:', error);
+      return response.error(res, error);
     }
+  },
 
-    // Save the updated order (using markModified to ensure nested changes are saved)
-    order.markModified('productDetail');
-    await order.save({ validateBeforeSave: false });
-
-    // Send notification to customer
-    const customerName = `${order.user.firstName || ''} ${order.user.lastName || ''}`.trim() || order.user.email;
-    const notificationMessage = `Your return request for order ${order.orderId || order._id} has been ${status.toLowerCase()}`;
-
+  returnRequest: async (req, res) => {
     try {
-      await oneSignalService.sendNotification(
-        [order.user._id.toString()],
-        `Return Request ${status}`,
-        notificationMessage,
-        {
-          orderId: order.orderId || order._id,
-          type: 'return_status_update',
-          status: status
-        }
-      );
+      console.log('🔄 Return request received:', req.body);
 
-      console.log(`📧 Return status notification sent to customer: ${customerName} for order: ${order.orderId}`);
-    } catch (notifError) {
-      console.error('Error sending notification to customer:', notifError);
-    }
+      const { orderId, reason, type } = req.body;
+      const userId = req.user.id;
 
-    return response.success(res, {
-      message: `Return request ${status.toLowerCase()} successfully`,
-      orderId: order.orderId || order._id,
-      status: status,
-      customerName: customerName
-    });
+      console.log('🔍 Processing return request:', {
+        orderId,
+        reason,
+        type,
+        userId
+      });
 
-  } catch (error) {
-    console.error('Error in updateReturnStatus:', error);
-    return response.error(res, error);
-  }
-},
+      if (!orderId || !reason || !type) {
+        return response.error(res, { message: "Order ID, reason, and type are required" });
+      }
 
-returnRequest: async (req, res) => {
-  try {
-    console.log('🔄 Return request received:', req.body);
-    
-    const { orderId, reason, type } = req.body;
-    const userId = req.user.id;
+      const order = await ProductRequest.findOne({
+        $or: [
+          { orderId: orderId },
+          { _id: mongoose.Types.ObjectId.isValid(orderId) ? orderId : null }
+        ],
+        user: userId
+      });
 
-    console.log('🔍 Processing return request:', {
-      orderId,
-      reason,
-      type,
-      userId
-    });
+      console.log('🔍 Found order:', order ? 'Yes' : 'No', order?._id);
 
-    if (!orderId || !reason || !type) {
-      return response.error(res, { message: "Order ID, reason, and type are required" });
-    }
+      if (!order) {
+        return response.error(res, { message: "Order not found" });
+      }
 
-    const order = await ProductRequest.findOne({
-      $or: [
-        { orderId: orderId },
-        { _id: mongoose.Types.ObjectId.isValid(orderId) ? orderId : null }
-      ],
-      user: userId
-    });
+      if (type === 'return' && order.status?.toLowerCase() !== 'delivered') {
+        return response.error(res, { message: "Only delivered orders can be returned" });
+      }
 
-    console.log('🔍 Found order:', order ? 'Yes' : 'No', order?._id);
+      if (type === 'cancel' && order.status?.toLowerCase() === 'delivered') {
+        return response.error(res, { message: "Delivered orders cannot be cancelled" });
+      }
 
-    if (!order) {
-      return response.error(res, { message: "Order not found" });
-    }
+      const newStatus = type === 'return' ? 'Return Requested' : 'Cancelled';
 
-    if (type === 'return' && order.status?.toLowerCase() !== 'delivered') {
-      return response.error(res, { message: "Only delivered orders can be returned" });
-    }
-
-    if (type === 'cancel' && order.status?.toLowerCase() === 'delivered') {
-      return response.error(res, { message: "Delivered orders cannot be cancelled" });
-    }
-
-    const newStatus = type === 'return' ? 'Return Requested' : 'Cancelled';
-    
-    // Update order status
-    const updateData = {
-      status: newStatus,
-      returnReason: reason,
-      returnRequestDate: new Date(),
-      returndate: new Date() // Add this for admin panel compatibility
-    };
-
-    // If it's a return request, also update productDetail with returnDetails
-    if (type === 'return') {
-      // Combine both updates in a single operation
-      const combinedUpdate = {
-        ...updateData,
-        // Update each product's returnDetails
-        ...order.productDetail.reduce((acc, product, index) => {
-          acc[`productDetail.${index}.returnDetails`] = {
-            returnStatus: "Return-requested",
-            isReturned: true,
-            returnRequestDate: new Date(),
-            reason: reason,
-            proofImages: []
-          };
-          return acc;
-        }, {})
+      // Update order status
+      const updateData = {
+        status: newStatus,
+        returnReason: reason,
+        returnRequestDate: new Date(),
+        returndate: new Date() // Add this for admin panel compatibility
       };
 
-      const updatedOrder = await ProductRequest.findByIdAndUpdate(
-        order._id, 
-        { $set: combinedUpdate }, 
-        { new: true }
-      );
-      
-      console.log('🔄 Updated order with returnDetails for', order.productDetail.length, 'products');
-      console.log('🔍 Updated order returnReason:', updatedOrder.returnReason);
-    } else {
-      // For cancel requests, just update main fields
-      const updatedOrder = await ProductRequest.findByIdAndUpdate(
-        order._id, 
-        updateData, 
-        { new: true }
-      );
+      // If it's a return request, also update productDetail with returnDetails
+      if (type === 'return') {
+        // Combine both updates in a single operation
+        const combinedUpdate = {
+          ...updateData,
+          // Update each product's returnDetails
+          ...order.productDetail.reduce((acc, product, index) => {
+            acc[`productDetail.${index}.returnDetails`] = {
+              returnStatus: "Return-requested",
+              isReturned: true,
+              returnRequestDate: new Date(),
+              reason: reason,
+              proofImages: []
+            };
+            return acc;
+          }, {})
+        };
+
+        const updatedOrder = await ProductRequest.findByIdAndUpdate(
+          order._id,
+          { $set: combinedUpdate },
+          { new: true }
+        );
+
+        console.log('🔄 Updated order with returnDetails for', order.productDetail.length, 'products');
+        console.log('🔍 Updated order returnReason:', updatedOrder.returnReason);
+      } else {
+        // For cancel requests, just update main fields
+        const updatedOrder = await ProductRequest.findByIdAndUpdate(
+          order._id,
+          updateData,
+          { new: true }
+        );
+      }
+      // Verify the update worked
+      const verifyOrder = await ProductRequest.findById(order._id);
+      console.log('🔍 Verification - Order after update:', {
+        orderId: verifyOrder.orderId,
+        status: verifyOrder.status,
+        returnReason: verifyOrder.returnReason,
+        returnRequestDate: verifyOrder.returnRequestDate,
+        returndate: verifyOrder.returndate,
+        productDetailCount: verifyOrder.productDetail?.length,
+        firstProductReturnDetails: verifyOrder.productDetail?.[0]?.returnDetails
+      });
+
+      const user = await User.findById(userId);
+      const notificationMessage = type === 'return'
+        ? `Return request submitted for order ${order.orderId}`
+        : `Order ${order.orderId} has been cancelled`;
+
+      try {
+        await oneSignalService.sendNotification(
+          [userId],
+          notificationMessage,
+          {
+            orderId: order.orderId,
+            type: type,
+            reason: reason
+          }
+        );
+      } catch (notifError) {
+        console.error('Notification error:', notifError);
+      }
+
+      return response.success(res, {
+        message: type === 'return' ? "Return request submitted successfully" : "Order cancelled successfully",
+        orderId: order.orderId,
+        status: newStatus
+      });
+
+    } catch (error) {
+      console.error('Return/Cancel request error:', error);
+      return response.error(res, error);
     }
-    // Verify the update worked
-    const verifyOrder = await ProductRequest.findById(order._id);
-    console.log('🔍 Verification - Order after update:', {
-      orderId: verifyOrder.orderId,
-      status: verifyOrder.status,
-      returnReason: verifyOrder.returnReason,
-      returnRequestDate: verifyOrder.returnRequestDate,
-      returndate: verifyOrder.returndate,
-      productDetailCount: verifyOrder.productDetail?.length,
-      firstProductReturnDetails: verifyOrder.productDetail?.[0]?.returnDetails
-    });
-
-    const user = await User.findById(userId);
-    const notificationMessage = type === 'return' 
-      ? `Return request submitted for order ${order.orderId}`
-      : `Order ${order.orderId} has been cancelled`;
-
-    try {
-      await oneSignalService.sendNotification(
-        [userId],
-        notificationMessage,
-        {
-          orderId: order.orderId,
-          type: type,
-          reason: reason
-        }
-      );
-    } catch (notifError) {
-      console.error('Notification error:', notifError);
-    }
-
-    return response.success(res, {
-      message: type === 'return' ? "Return request submitted successfully" : "Order cancelled successfully",
-      orderId: order.orderId,
-      status: newStatus
-    });
-
-  } catch (error) {
-    console.error('Return/Cancel request error:', error);
-    return response.error(res, error);
   }
-}
 
 };

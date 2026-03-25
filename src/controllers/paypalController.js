@@ -1,6 +1,7 @@
 const checkoutNodeJssdk = require('@paypal/checkout-server-sdk');
 const { client } = require('@config/paypal');
 const Product = require('@models/Product');
+const Card = require('@models/Card');
 const oneSignalService = require('../services/oneSignalService');
 
 // Create PayPal Order
@@ -43,16 +44,16 @@ exports.createOrder = async (req, res) => {
       }
     }
 
-    
+
     let shippingCost = Number(total) - itemTotal;
-    
-  
+
+
     if (shippingCost < 0) {
       shippingCost = 0;
       total = itemTotal;
     }
 
-   
+
     const purchase_units = [{
       amount: {
         currency_code: 'USD',
@@ -166,10 +167,10 @@ exports.captureOrder = async (req, res) => {
     }
 
   } catch (error) {
-    const isCardDeclined = error.message?.includes('PAYER_CANNOT_PAY') || 
-                          error.message?.includes('CARD_DECLINED') ||
-                          error.message?.includes('INSTRUMENT_DECLINED');
-    
+    const isCardDeclined = error.message?.includes('PAYER_CANNOT_PAY') ||
+      error.message?.includes('CARD_DECLINED') ||
+      error.message?.includes('INSTRUMENT_DECLINED');
+
     res.status(error.statusCode || 500).json({
       status: false,
       message: isCardDeclined ? 'Card was declined. Please use a valid payment method.' : 'Failed to capture PayPal payment',
@@ -187,7 +188,7 @@ exports.getOrderDetails = async (req, res) => {
 
     const request = new checkoutNodeJssdk.orders.OrdersGetRequest(orderID);
     const order = await client().execute(request);
-    
+
     // Check if payment was actually captured
     const captureStatus = order.result.purchase_units?.[0]?.payments?.captures?.[0]?.status;
     const isActuallyPaid = captureStatus === 'COMPLETED';
@@ -325,10 +326,10 @@ exports.processCardPayment = async (req, res) => {
     // Create PayPal order with card payment source
     const request = new checkoutNodeJssdk.orders.OrdersCreateRequest();
     request.prefer("return=representation");
-    
+
     // Add PayPal-Request-Id header
     request.headers['PayPal-Request-Id'] = requestId;
-    
+
     // Calculate item total
     const itemTotal = productDetail.reduce((sum, item) => {
       return sum + (Number(item.price) * Number(item.qty || item.quantity || 1));
@@ -336,10 +337,10 @@ exports.processCardPayment = async (req, res) => {
 
     const shippingCost = Number(shipping) || 0;
     const taxAmount = Number(tax) || 0;
-    
+
     // Use the calculated total to ensure math is correct
     const calculatedTotal = itemTotal + shippingCost + taxAmount;
-    
+
     // Fix floating point precision issues
     const finalItemTotal = parseFloat(itemTotal.toFixed(2));
     const finalShipping = parseFloat(shippingCost.toFixed(2));
@@ -359,7 +360,7 @@ exports.processCardPayment = async (req, res) => {
     if (shipping_address.country) {
       const countryMap = {
         'Honduras': 'HN',
-        'Guatemala': 'GT', 
+        'Guatemala': 'GT',
         'El Salvador': 'SV',
         'United States': 'US',
         'USA': 'US'
@@ -479,14 +480,317 @@ exports.processCardPayment = async (req, res) => {
 
   } catch (error) {
     console.error('PayPal Card Payment Error:', error);
-    
+
     let errorMessage = 'Failed to process card payment';
     let statusCode = 500;
-    
+
     // Handle PayPal specific errors
     if (error.statusCode) {
       statusCode = error.statusCode;
-      
+
+      if (error.message.includes('INVALID_CARD_NUMBER')) {
+        errorMessage = 'Invalid card number';
+        statusCode = 400;
+      } else if (error.message.includes('CARD_EXPIRED')) {
+        errorMessage = 'Card has expired';
+        statusCode = 400;
+      } else if (error.message.includes('INSUFFICIENT_FUNDS')) {
+        errorMessage = 'Insufficient funds';
+        statusCode = 400;
+      } else if (error.message.includes('CARD_DECLINED')) {
+        errorMessage = 'Card was declined';
+        statusCode = 400;
+      } else if (error.message.includes('UNPROCESSABLE_ENTITY')) {
+        errorMessage = 'Invalid payment information. Please check your card details and address.';
+        statusCode = 400;
+      } else if (error.message.includes('INVALID_REQUEST')) {
+        errorMessage = 'Invalid payment request. Please try again.';
+        statusCode = 400;
+      }
+    }
+
+    res.status(statusCode).json({
+      status: false,
+      message: errorMessage,
+      error: error.message,
+      debug: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
+  }
+};
+
+
+exports.processCardPaymentNew = async (req, res) => {
+  try {
+    const { card_id, shipping_address, productDetail, total, subtotal, shipping, tax, deliveryCharge } = req.body;
+    const ProductRequest = require('@models/ProductRequest');
+
+    console.log(total)
+
+    // Validate required fields
+    if (!productDetail || productDetail.length === 0) {
+      return res.status(400).json({
+        status: false,
+        message: 'Product details are required'
+      });
+    }
+
+    const cards = await Card.findById(card_id);
+
+    let card = {}
+    if (cards) {
+      card = {
+        number: cards.cardNumber,
+        expiry: cards.expiryMonth + "/" + cards.expiryYear,
+        cvv: cards.cvv,
+        name: cards.cardholderName
+      }
+    }
+
+    console.log(card)
+
+
+
+    if (!card || !card.number || !card.expiry || !card.cvv || !card.name) {
+      return res.status(400).json({
+        status: false,
+        message: 'Complete card details are required (number, expiry, cvv, name)'
+      });
+    }
+
+    if (!shipping_address || !shipping_address.firstName || !shipping_address.address) {
+      return res.status(400).json({
+        status: false,
+        message: 'Complete shipping address is required'
+      });
+    }
+
+    if (!total || isNaN(total) || total <= 0) {
+      return res.status(400).json({
+        status: false,
+        message: 'Invalid total amount'
+      });
+    }
+
+    // Validate card details
+    const cardNumber = card.number.replace(/\s/g, '');
+    if (cardNumber.length < 13 || cardNumber.length > 19) {
+      return res.status(400).json({
+        status: false,
+        message: 'Invalid card number'
+      });
+    }
+
+    // Parse expiry date
+    const [expMonth, expYear] = card.expiry.split('/');
+    if (!expMonth || !expYear || expMonth.length !== 2 || expYear.length !== 2) {
+      return res.status(400).json({
+        status: false,
+        message: 'Invalid expiry date format. Use MM/YY'
+      });
+    }
+
+    // Validate expiry date
+    const currentYear = new Date().getFullYear() % 100;
+    const currentMonth = new Date().getMonth() + 1;
+    const cardYear = parseInt(expYear);
+    const cardMonth = parseInt(expMonth);
+
+    if (cardYear < currentYear || (cardYear === currentYear && cardMonth < currentMonth)) {
+      return res.status(400).json({
+        status: false,
+        message: 'Card has expired'
+      });
+    }
+
+    if (cardMonth < 1 || cardMonth > 12) {
+      return res.status(400).json({
+        status: false,
+        message: 'Invalid expiry month'
+      });
+    }
+
+    // Generate unique PayPal-Request-Id
+    const requestId = `CARD-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
+    // Create PayPal order with card payment source
+    const request = new checkoutNodeJssdk.orders.OrdersCreateRequest();
+    request.prefer("return=representation");
+
+    // Add PayPal-Request-Id header
+    request.headers['PayPal-Request-Id'] = requestId;
+
+    // Calculate item total
+    const itemTotal = productDetail.reduce((sum, item) => {
+      return sum + (Number(item.price) * Number(item.qty || item.quantity || 1));
+    }, 0);
+
+    const shippingCost = Number(shipping) || 0;
+    const taxAmount = Number(tax) || 0;
+
+    // Use the calculated total to ensure math is correct
+    const calculatedTotal = itemTotal + shippingCost + taxAmount;
+
+    // Fix floating point precision issues
+    const finalItemTotal = parseFloat(itemTotal.toFixed(2));
+    const finalShipping = parseFloat(shippingCost.toFixed(2));
+    const finalTax = parseFloat(taxAmount.toFixed(2));
+    const finalTotal = parseFloat(calculatedTotal.toFixed(2));
+    const mainTotal = parseFloat(total.toFixed(2));
+
+    console.log(mainTotal, finalTotal)
+
+    console.log('PayPal Order Calculation:', {
+      itemTotal: finalItemTotal,
+      shipping: finalShipping,
+      tax: finalTax,
+      calculatedTotal: finalTotal,
+      receivedTotal: Number(total)
+    });
+
+    // Determine country code based on shipping address
+    let countryCode = 'HN'; // Default to Honduras for this client
+    if (shipping_address.country) {
+      const countryMap = {
+        'Honduras': 'HN',
+        'Guatemala': 'GT',
+        'El Salvador': 'SV',
+        'United States': 'US',
+        'USA': 'US'
+      };
+      countryCode = countryMap[shipping_address.country] || 'HN'; // Default to Honduras
+    }
+
+    const purchase_units = [{
+      amount: {
+        currency_code: 'USD',
+        value: mainTotal.toFixed(2), // Use string format with 2 decimals
+        breakdown: {
+          item_total: {
+            currency_code: 'USD',
+            value: finalItemTotal.toFixed(2)
+          },
+          shipping: {
+            currency_code: 'USD',
+            value: deliveryCharge.toFixed(2)
+          },
+
+          tax_total: {
+            currency_code: 'USD',
+            value: finalTax.toFixed(2)
+          }
+        }
+      },
+      description: 'Order from Merk Store',
+      items: productDetail.map(item => ({
+        name: (item.product?.name || item.name || 'Product').substring(0, 127), // PayPal limit
+        unit_amount: {
+          currency_code: 'USD',
+          value: parseFloat(Number(item.price).toFixed(2)).toFixed(2) // Ensure proper format
+        },
+        quantity: String(item.qty || item.quantity || 1)
+      })),
+      shipping: {
+        name: {
+          full_name: `${shipping_address.firstName || ''} ${shipping_address.lastName || ''}`.trim() || 'Customer'
+        },
+        address: {
+          address_line_1: shipping_address.address || '123 Main St',
+          admin_area_2: shipping_address.city || 'New York',
+          admin_area_1: shipping_address.state || 'NY',
+          postal_code: shipping_address.pinCode || '10001',
+          country_code: countryCode
+        }
+      }
+    }]
+
+    console.log(purchase_units[0].amount)
+
+    // return res.status(400).json({
+    //   status: false,
+    //   message: 'Complete card details are required (number, expiry, cvv, name)'
+    // });
+
+
+    request.requestBody({
+      intent: 'CAPTURE',
+      payment_source: {
+        card: {
+          number: cardNumber,
+          expiry: `20${expYear}-${expMonth.padStart(2, '0')}`,
+          security_code: card.cvv,
+          name: card.name || 'Card Holder',
+          billing_address: {
+            address_line_1: shipping_address.address || '123 Main St',
+            admin_area_2: shipping_address.city || 'New York',
+            admin_area_1: shipping_address.state || 'NY',
+            postal_code: shipping_address.pinCode || '10001',
+            country_code: countryCode
+          }
+        }
+      },
+      purchase_units
+    });
+
+    console.log('PayPal Card Payment Request Data:', {
+      cardNumber: cardNumber.substring(0, 4) + '****',
+      expiry: `20${expYear}-${expMonth.padStart(2, '0')}`,
+      cvv: '***',
+      name: card.name,
+      countryCode,
+      finalTotal,
+      finalItemTotal,
+      finalShipping,
+      finalTax
+    });
+
+    const order = await client().execute(request);
+
+    // Save order to database
+    const newOrder = new ProductRequest({
+      user: req.user.id,
+      productDetail: productDetail,
+      shipping_address: shipping_address,
+      total: total, // Use calculated total
+      tax: finalTax,
+      deliveryCharge: deliveryCharge,
+      paymentmode: 'card',
+      status: 'Pending',
+      orderId: `ORD-${Date.now()}`,
+      paypalOrderId: order.result.id,
+      paypalStatus: order.result.status
+    });
+
+    await newOrder.save();
+
+    // Send OneSignal notification for new order
+    try {
+      const User = require('@models/User');
+      const user = await User.findById(req.user.id);
+      if (user) {
+        await oneSignalService.orderReceived(newOrder, user);
+      }
+    } catch (notificationError) {
+      console.error('OneSignal notification error:', notificationError);
+    }
+
+    res.json({
+      status: true,
+      message: 'Payment processed successfully',
+      orderId: newOrder._id,
+      paypalOrderId: order.result.id,
+      data: order.result
+    });
+
+  } catch (error) {
+    console.error('PayPal Card Payment Error:', error);
+
+    let errorMessage = 'Failed to process card payment';
+    let statusCode = 500;
+
+    // Handle PayPal specific errors
+    if (error.statusCode) {
+      statusCode = error.statusCode;
+
       if (error.message.includes('INVALID_CARD_NUMBER')) {
         errorMessage = 'Invalid card number';
         statusCode = 400;
