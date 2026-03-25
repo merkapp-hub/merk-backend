@@ -17,7 +17,7 @@ exports.createOrder = async (req, res) => {
       });
     }
 
-    // Calculate item total
+  
     const itemTotal = items.reduce((sum, item) => {
       return sum + (Number(item.price) * Number(item.qty));
     }, 0);
@@ -86,8 +86,8 @@ exports.createOrder = async (req, res) => {
           address_line_1: shipping_address.address || 'Address not provided',
           admin_area_2: shipping_address.city || 'City',
           admin_area_1: shipping_address.state?.value || shipping_address.state || '',
-          postal_code: shipping_address.pinCode || '00000', // Use 00000 as default for Honduras
-          country_code: shipping_address.country?.value || 'HN' // Default to Honduras
+          postal_code: shipping_address.pinCode || '00000', 
+          country_code: shipping_address.country?.value || 'HN' 
         }
       } : undefined
     }];
@@ -253,119 +253,70 @@ exports.processCardPayment = async (req, res) => {
     const { card, shipping_address, productDetail, total, subtotal, shipping, tax } = req.body;
     const ProductRequest = require('@models/ProductRequest');
 
-    // Validate required fields
     if (!productDetail || productDetail.length === 0) {
-      return res.status(400).json({
-        status: false,
-        message: 'Product details are required'
-      });
+      return res.status(400).json({ status: false, message: 'Product details are required' });
     }
 
     if (!card || !card.number || !card.expiry || !card.cvv || !card.name) {
-      return res.status(400).json({
-        status: false,
-        message: 'Complete card details are required (number, expiry, cvv, name)'
-      });
+      return res.status(400).json({ status: false, message: 'Complete card details are required (number, expiry, cvv, name)' });
     }
 
     if (!shipping_address || !shipping_address.firstName || !shipping_address.address) {
-      return res.status(400).json({
-        status: false,
-        message: 'Complete shipping address is required'
-      });
+      return res.status(400).json({ status: false, message: 'Complete shipping address is required' });
     }
 
     if (!total || isNaN(total) || total <= 0) {
-      return res.status(400).json({
-        status: false,
-        message: 'Invalid total amount'
-      });
+      return res.status(400).json({ status: false, message: 'Invalid total amount' });
     }
 
-    // Validate card details
     const cardNumber = card.number.replace(/\s/g, '');
     if (cardNumber.length < 13 || cardNumber.length > 19) {
-      return res.status(400).json({
-        status: false,
-        message: 'Invalid card number'
-      });
+      return res.status(400).json({ status: false, message: 'Invalid card number' });
     }
 
-    // Parse expiry date
     const [expMonth, expYear] = card.expiry.split('/');
     if (!expMonth || !expYear || expMonth.length !== 2 || expYear.length !== 2) {
-      return res.status(400).json({
-        status: false,
-        message: 'Invalid expiry date format. Use MM/YY'
-      });
+      return res.status(400).json({ status: false, message: 'Invalid expiry date format. Use MM/YY' });
     }
 
-    // Validate expiry date
     const currentYear = new Date().getFullYear() % 100;
     const currentMonth = new Date().getMonth() + 1;
     const cardYear = parseInt(expYear);
     const cardMonth = parseInt(expMonth);
 
     if (cardYear < currentYear || (cardYear === currentYear && cardMonth < currentMonth)) {
-      return res.status(400).json({
-        status: false,
-        message: 'Card has expired'
-      });
+      return res.status(400).json({ status: false, message: 'Card has expired' });
     }
 
     if (cardMonth < 1 || cardMonth > 12) {
-      return res.status(400).json({
-        status: false,
-        message: 'Invalid expiry month'
-      });
+      return res.status(400).json({ status: false, message: 'Invalid expiry month' });
     }
 
-    // Generate unique PayPal-Request-Id
     const requestId = `CARD-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
-    // Create PayPal order with card payment source
     const request = new checkoutNodeJssdk.orders.OrdersCreateRequest();
     request.prefer("return=representation");
-
-    // Add PayPal-Request-Id header
     request.headers['PayPal-Request-Id'] = requestId;
 
-    // Calculate item total
     const itemTotal = productDetail.reduce((sum, item) => {
       return sum + (Number(item.price) * Number(item.qty || item.quantity || 1));
     }, 0);
 
     const shippingCost = Number(shipping) || 0;
     const taxAmount = Number(tax) || 0;
-
-    // Use the calculated total to ensure math is correct
     const calculatedTotal = itemTotal + shippingCost + taxAmount;
 
-    // Fix floating point precision issues
     const finalItemTotal = parseFloat(itemTotal.toFixed(2));
     const finalShipping = parseFloat(shippingCost.toFixed(2));
     const finalTax = parseFloat(taxAmount.toFixed(2));
     const finalTotal = parseFloat(calculatedTotal.toFixed(2));
 
-    console.log('PayPal Order Calculation:', {
-      itemTotal: finalItemTotal,
-      shipping: finalShipping,
-      tax: finalTax,
-      calculatedTotal: finalTotal,
-      receivedTotal: Number(total)
-    });
+    console.log('PayPal Order Calculation:', { itemTotal: finalItemTotal, shipping: finalShipping, tax: finalTax, calculatedTotal: finalTotal, receivedTotal: Number(total) });
 
-    // Determine country code based on shipping address
-    let countryCode = 'HN'; // Default to Honduras for this client
+    let countryCode = 'HN';
     if (shipping_address.country) {
-      const countryMap = {
-        'Honduras': 'HN',
-        'Guatemala': 'GT',
-        'El Salvador': 'SV',
-        'United States': 'US',
-        'USA': 'US'
-      };
-      countryCode = countryMap[shipping_address.country] || 'HN'; // Default to Honduras
+      const countryMap = { 'Honduras': 'HN', 'Guatemala': 'GT', 'El Salvador': 'SV', 'United States': 'US', 'USA': 'US' };
+      countryCode = countryMap[shipping_address.country] || 'HN';
     }
 
     request.requestBody({
@@ -388,35 +339,21 @@ exports.processCardPayment = async (req, res) => {
       purchase_units: [{
         amount: {
           currency_code: 'USD',
-          value: finalTotal.toFixed(2), // Use string format with 2 decimals
+          value: finalTotal.toFixed(2),
           breakdown: {
-            item_total: {
-              currency_code: 'USD',
-              value: finalItemTotal.toFixed(2)
-            },
-            shipping: {
-              currency_code: 'USD',
-              value: finalShipping.toFixed(2)
-            },
-            tax_total: {
-              currency_code: 'USD',
-              value: finalTax.toFixed(2)
-            }
+            item_total: { currency_code: 'USD', value: finalItemTotal.toFixed(2) },
+            shipping: { currency_code: 'USD', value: finalShipping.toFixed(2) },
+            tax_total: { currency_code: 'USD', value: finalTax.toFixed(2) }
           }
         },
         description: 'Order from Merk Store',
         items: productDetail.map(item => ({
-          name: (item.product?.name || item.name || 'Product').substring(0, 127), // PayPal limit
-          unit_amount: {
-            currency_code: 'USD',
-            value: parseFloat(Number(item.price).toFixed(2)).toFixed(2) // Ensure proper format
-          },
+          name: (item.product?.name || item.name || 'Product').substring(0, 127),
+          unit_amount: { currency_code: 'USD', value: parseFloat(Number(item.price).toFixed(2)).toFixed(2) },
           quantity: String(item.qty || item.quantity || 1)
         })),
         shipping: {
-          name: {
-            full_name: `${shipping_address.firstName || ''} ${shipping_address.lastName || ''}`.trim() || 'Customer'
-          },
+          name: { full_name: `${shipping_address.firstName || ''} ${shipping_address.lastName || ''}`.trim() || 'Customer' },
           address: {
             address_line_1: shipping_address.address || '123 Main St',
             admin_area_2: shipping_address.city || 'New York',
@@ -428,26 +365,25 @@ exports.processCardPayment = async (req, res) => {
       }]
     });
 
-    console.log('PayPal Card Payment Request Data:', {
-      cardNumber: cardNumber.substring(0, 4) + '****',
-      expiry: `20${expYear}-${expMonth.padStart(2, '0')}`,
-      cvv: '***',
-      name: card.name,
-      countryCode,
-      finalTotal,
-      finalItemTotal,
-      finalShipping,
-      finalTax
-    });
+    console.log('PayPal Card Payment Request Data:', { cardNumber: cardNumber.substring(0, 4) + '****', expiry: `20${expYear}-${expMonth.padStart(2, '0')}`, cvv: '***', name: card.name, countryCode, finalTotal, finalItemTotal, finalShipping, finalTax });
 
     const order = await client().execute(request);
 
-    // Save order to database
+    if (order.result.status !== 'COMPLETED') {
+      const captureRequest = new checkoutNodeJssdk.orders.OrdersCaptureRequest(order.result.id);
+      captureRequest.requestBody({});
+      const capture = await client().execute(captureRequest);
+      console.log('Capture Response:', capture.result);
+      if (capture.result.status !== 'COMPLETED') {
+        return res.status(400).json({ status: false, message: 'Payment not completed', data: capture.result });
+      }
+    }
+
     const newOrder = new ProductRequest({
       user: req.user.id,
       productDetail: productDetail,
       shipping_address: shipping_address,
-      total: finalTotal, // Use calculated total
+      total: finalTotal,
       tax: finalTax,
       deliveryCharge: finalShipping,
       paymentmode: 'card',
@@ -459,7 +395,6 @@ exports.processCardPayment = async (req, res) => {
 
     await newOrder.save();
 
-    // Send OneSignal notification for new order
     try {
       const User = require('@models/User');
       const user = await User.findById(req.user.id);
@@ -484,7 +419,9 @@ exports.processCardPayment = async (req, res) => {
     let errorMessage = 'Failed to process card payment';
     let statusCode = 500;
 
-    // Handle PayPal specific errors
+    // Check error.details array for CVV failure (PayPal sends it here)
+    const detailsStr = JSON.stringify(error.details || []);
+
     if (error.statusCode) {
       statusCode = error.statusCode;
 
@@ -499,6 +436,13 @@ exports.processCardPayment = async (req, res) => {
         statusCode = 400;
       } else if (error.message.includes('CARD_DECLINED')) {
         errorMessage = 'Card was declined';
+        statusCode = 400;
+      } else if (
+        error.message.includes('CVV_FAILURE') ||
+        error.message.includes('CVV2_FAILURE') ||
+        detailsStr.includes('CVV')
+      ) {
+        errorMessage = 'Card CVV is incorrect. Please check your card details.';
         statusCode = 400;
       } else if (error.message.includes('UNPROCESSABLE_ENTITY')) {
         errorMessage = 'Invalid payment information. Please check your card details and address.';

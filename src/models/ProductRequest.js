@@ -56,6 +56,8 @@ const productrequestchema = new mongoose.Schema(
           our_price: { type: Number },
           other_price: { type: Number },
         },
+        color: { type: String, default: "" },
+        size: { type: String, default: "" },
         // return and refund related
         isReturnable: { type: Boolean }, // capture it from product at order time
         returnDetails: {

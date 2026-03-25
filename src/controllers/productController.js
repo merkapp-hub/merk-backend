@@ -906,6 +906,8 @@ module.exports = {
           qty: item.qty,
           price: item.price,
           price_slot: item.price_slot,
+          color: item.color || "",
+          size: item.size || "",
           isReturnable,
         });
 
@@ -2160,17 +2162,33 @@ module.exports = {
         .skip(skip)
         .limit(limit);
 
-      const indexedProducts = product.map((item, index) => ({
-        ...(item.toObject?.() || item),
-        indexNo: skip + index + 1,
-      }));
+      // For orders where seller_id didn't populate (null/invalid ObjectId),
+      // try to fetch seller from the first product's userid field
+      const enrichedProducts = await Promise.all(
+        product.map(async (item, index) => {
+          const obj = item.toObject?.() || item;
+          obj.indexNo = skip + index + 1;
+
+          if (!obj.seller_id && obj.productDetail?.length > 0) {
+            const firstProductId = obj.productDetail[0]?.product?._id || obj.productDetail[0]?.product;
+            if (firstProductId) {
+              const prod = await Product.findById(firstProductId).select("userid").populate("userid", "-password").lean();
+              if (prod?.userid) {
+                obj.seller_id = prod.userid;
+              }
+            }
+          }
+
+          return obj;
+        })
+      );
 
       const totalBlogs = await ProductRequest.countDocuments(cond);
       const totalPages = Math.ceil(totalBlogs / limit);
 
       return res.status(200).json({
         status: true,
-        data: indexedProducts,
+        data: enrichedProducts,
         pagination: {
           totalItems: totalBlogs,
           totalPages: totalPages,
