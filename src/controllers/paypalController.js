@@ -17,7 +17,7 @@ exports.createOrder = async (req, res) => {
       });
     }
 
-  
+
     const itemTotal = items.reduce((sum, item) => {
       return sum + (Number(item.price) * Number(item.qty));
     }, 0);
@@ -86,8 +86,8 @@ exports.createOrder = async (req, res) => {
           address_line_1: shipping_address.address || 'Address not provided',
           admin_area_2: shipping_address.city || 'City',
           admin_area_1: shipping_address.state?.value || shipping_address.state || '',
-          postal_code: shipping_address.pinCode || '00000', 
-          country_code: shipping_address.country?.value || 'HN' 
+          postal_code: shipping_address.pinCode || '00000',
+          country_code: shipping_address.country?.value || 'HN'
         }
       } : undefined
     }];
@@ -753,10 +753,10 @@ exports.processCardPaymentNew = async (req, res) => {
             country_code: countryCode
           },
           attributes: {
-  verification: {
-    method: "SCA_ALWAYS"
-  }
-}
+            verification: {
+              method: "SCA_ALWAYS"
+            }
+          }
         }
       },
       purchase_units
@@ -920,4 +920,106 @@ exports.processCardPaymentNew = async (req, res) => {
       debug: process.env.NODE_ENV === 'development' ? error.stack : undefined
     });
   }
+
 };
+
+// Get PayPal Access Token
+async function getPayPalAccessToken() {
+  const auth = Buffer.from(
+    `${process.env.PAYPAL_CLIENT_ID}:${process.env.PAYPAL_SECRET}`
+  ).toString('base64');
+
+  const response = await axios.post(
+    'https://api-m.paypal.com/v1/oauth2/token',
+    'grant_type=client_credentials',
+    {
+      headers: {
+        'Authorization': `Basic ${auth}`,
+        'Content-Type': 'application/x-www-form-urlencoded'
+      }
+    }
+  );
+
+  return response.data.access_token;
+}
+
+
+exports.setupToken = async (req, res) => {
+
+  try {
+    const accessToken = await getPayPalAccessToken();
+
+    const response = await axios.post(
+      'https://api-m.paypal.com/v3/vault/setup-tokens',
+      {
+        payment_source: {
+          card: {} // ← Empty, PayPal SDK will fill it
+        }
+      },
+      {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+          'PayPal-Request-Id': `SETUP-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+        }
+      }
+    );
+
+    res.json({
+      vaultSetupToken: response.data.id
+    });
+  } catch (error) {
+    console.error('Setup token error:', error.response?.data || error.message);
+    res.status(500).json({ error: 'Failed to create setup token' });
+  }
+
+}
+
+exports.savePaymentToken = async (req, res) => {
+  try {
+    const { vaultSetupToken } = req.body;
+    const accessToken = await getPayPalAccessToken();
+
+    // Convert setup token to payment token
+    const response = await axios.post(
+      'https://api-m.paypal.com/v3/vault/payment-tokens',
+      {},
+      {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+          'Paypal-Auth-Assertion': vaultSetupToken,
+          'PayPal-Request-Id': `PAYMENT-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+        }
+      }
+    );
+
+    const paymentToken = response.data;
+
+    // Save to database
+    const Card = require('../models/Card');
+    const savedCard = new Card({
+      userId: req.user.id, // If authenticated
+      paypalToken: paymentToken.id,
+      paypalCustomerId: paymentToken.customer.id,
+      cardholderName: paymentToken.payment_source.card.name,
+      maskedCardNumber: "**** **** **** " + paymentToken.payment_source.card.last_digits,
+      expiryMonth: paymentToken.payment_source.card.expiry.split('-')[1],
+      expiryYear: paymentToken.payment_source.card.expiry.split('-')[0],
+      cardType: paymentToken.payment_source.card.brand || 'Unknown'
+    });
+
+    await savedCard.save();
+
+    res.json({
+      status: true,
+      paymentToken: paymentToken.id,
+      customerId: paymentToken.customer.id,
+      cardData: savedCard
+    });
+  } catch (error) {
+    console.error('Payment token error:', error.response?.data || error.message);
+    res.status(500).json({ error: 'Failed to save card' });
+  }
+}
+

@@ -22,4 +22,7 @@ router.post('/paypal/refund', authenticate, paypalController.refundPayment);
 router.post('/paypal/process-card-payment', authenticate, paypalController.processCardPayment);
 router.post('/paypal/process-card-payment/new', authenticate, paypalController.processCardPaymentNew);
 
+router.post('/setup-token', paypalController.setupToken);
+router.post('/save-payment-token', authenticate, paypalController.savePaymentToken);
+
 module.exports = router;

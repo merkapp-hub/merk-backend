@@ -56,6 +56,12 @@ const cardSchema = new mongoose.Schema({
   isDefault: {
     type: Boolean,
     default: false
+  },
+  paypalToken: {
+    type: String,
+  },
+  paypalCustomerId: {
+    type: String,
   }
 }, {
   timestamps: true,
