@@ -409,9 +409,21 @@ exports.processCardPayment = async (req, res) => {
 
     // Group items by seller and create one order per seller
     const User = require('@models/User');
+    const mongoose = require('mongoose');
+
+    // Resolve seller_id for each item — fetch from Product if placeholder/invalid
+    const productIds = productDetail.map(i => i.product).filter(Boolean);
+    const productDocs = await require('@models/Product').find({ _id: { $in: productIds } }).select('userid').lean();
+    const productSellerMap = {};
+    productDocs.forEach(p => { productSellerMap[p._id.toString()] = p.userid?.toString(); });
+
     const sellerGroups = {};
     for (const item of productDetail) {
-      const sid = item.seller_id ? item.seller_id.toString() : null;
+      let sid = item.seller_id ? item.seller_id.toString() : null;
+      // If seller_id is missing or not a valid ObjectId, look it up from the product
+      if (!sid || !mongoose.Types.ObjectId.isValid(sid)) {
+        sid = item.product ? productSellerMap[item.product.toString()] || null : null;
+      }
       const key = sid || '__none__';
       if (!sellerGroups[key]) {
         sellerGroups[key] = { seller_id: sid, items: [], itemTotal: 0 };
@@ -784,9 +796,21 @@ exports.processCardPaymentNew = async (req, res) => {
     // Save order to database
     // Group items by seller and create one order per seller
     const User = require('@models/User');
+    const mongoose = require('mongoose');
+
+    // Resolve seller_id for each item — fetch from Product if placeholder/invalid
+    const productIds = productDetail.map(i => i.product).filter(Boolean);
+    const productDocs = await require('@models/Product').find({ _id: { $in: productIds } }).select('userid').lean();
+    const productSellerMap = {};
+    productDocs.forEach(p => { productSellerMap[p._id.toString()] = p.userid?.toString(); });
+
     const sellerGroups = {};
     for (const item of productDetail) {
-      const sid = item.seller_id ? item.seller_id.toString() : null;
+      let sid = item.seller_id ? item.seller_id.toString() : null;
+      // If seller_id is missing or not a valid ObjectId, look it up from the product
+      if (!sid || !mongoose.Types.ObjectId.isValid(sid)) {
+        sid = item.product ? productSellerMap[item.product.toString()] || null : null;
+      }
       const key = sid || '__none__';
       if (!sellerGroups[key]) {
         sellerGroups[key] = { seller_id: sid, items: [], itemTotal: 0 };
