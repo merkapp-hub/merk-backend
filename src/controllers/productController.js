@@ -3062,9 +3062,9 @@ module.exports = {
       console.log(`🔄 Using currency symbol: "${pdfSafeSymbol}" (${userCurrency})`);
 
       // Helper function to convert and format price
-      const formatPrice = (priceInUSD) => {
-        const converted = Math.round(priceInUSD * exchangeRate);
-        const formatted = `${pdfSafeSymbol} ${converted.toLocaleString()}`;
+    const formatPrice = (priceInUSD) => {
+  const converted = parseFloat((priceInUSD * exchangeRate).toFixed(2));
+  const formatted = `${pdfSafeSymbol} ${converted.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
         console.log(`💱 Converting: $${priceInUSD} → ${formatted} (rate: ${exchangeRate}, symbol: "${currencySymbol}" → "${pdfSafeSymbol}")`);
         return formatted;
       };
