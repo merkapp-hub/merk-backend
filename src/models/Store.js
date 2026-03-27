@@ -38,9 +38,9 @@ const storeschema = new mongoose.Schema({
     email: {
         type: String,
     },
-    logo: {
+  logo: {
         type: String,
-        default: null
+        required: [true, 'Company logo is required'],
     },
     verification: {
         type: String,
