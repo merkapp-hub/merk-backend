@@ -131,20 +131,71 @@ module.exports = {
     },
 
 
-
-    updateStore: async (req, res) => {
+updateStore: async (req, res) => {
         try {
             const payload = req?.body || {};
-            // let product = await Store.findByIdAndUpdate(payload?.id, payload, {
-            //     new: true,
-            //     upsert: true,
-            // });
-            let product = await User.findByIdAndUpdate(payload?.id, payload, {
-                new: true,
-                upsert: true,
+            const { userid, companyName, logo } = payload;
+            
+            if (!userid) {
+                return res.status(400).json({
+                    status: false,
+                    message: 'User ID is required'
+                });
+            }
+            
+            // Find store by userid
+            const store = await Store.findOne({ userid });
+            
+            if (!store) {
+                return res.status(404).json({
+                    status: false,
+                    message: 'Store not found'
+                });
+            }
+            
+            // Update only companyName and logo
+            if (companyName) store.companyName = companyName;
+            if (logo) store.logo = logo;
+            
+            await store.save();
+            
+            return res.status(200).json({
+                status: true,
+                message: 'Store updated successfully',
+                data: store
             });
-            return response.success(res, product);
         } catch (error) {
+            console.error("Error in updateStore:", error);
+            return response.error(res, error);
+        }
+    },
+    
+    getStoreByUserId: async (req, res) => {
+        try {
+            const { userid } = req.params;
+            
+            if (!userid) {
+                return res.status(400).json({
+                    status: false,
+                    message: 'User ID is required'
+                });
+            }
+            
+            const store = await Store.findOne({ userid });
+            
+            if (!store) {
+                return res.status(404).json({
+                    status: false,
+                    message: 'Store not found'
+                });
+            }
+            
+            return res.status(200).json({
+                status: true,
+                data: store
+            });
+        } catch (error) {
+            console.error("Error in getStoreByUserId:", error);
             return response.error(res, error);
         }
     },
