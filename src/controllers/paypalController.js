@@ -6,6 +6,7 @@ const oneSignalService = require('../services/oneSignalService');
 const { default: axios } = require('axios');
 const { default: mongoose } = require('mongoose');
 
+
 // Create PayPal Order
 exports.createOrder = async (req, res) => {
   try {
@@ -663,64 +664,119 @@ exports.processCardPaymentNew = async (req, res) => {
         }
       }
     }]
-
-    request.requestBody({
-      intent: 'CAPTURE',
-      // payment_source: {
-      //   card: {
-      //     number: cardNumber,
-      //     expiry: `20${expYear}-${expMonth.padStart(2, '0')}`,
-      //     security_code: card.cvv,
-      //     name: card.name || 'Card Holder',
-      //     billing_address: {
-      //       address_line_1: shipping_address.address || '123 Main St',
-      //       admin_area_2: shipping_address.city || 'New York',
-      //       admin_area_1: shipping_address.state || 'NY',
-      //       postal_code: shipping_address.pinCode || '10001',
-      //       country_code: countryCode
-      //     },
-      //     attributes: {
-      //       verification: {
-      //         method: "SCA_ALWAYS"
-      //       }
-      //     }
-      //   }
-      // },
-      payment_source: {
-        token: {
-          id: cards.paypalToken,  // ← Use the token!
-          type: 'PAYMENT_METHOD_TOKEN'
-        }
+    const accessToken = await getPayPalAccessToken();
+    console.log(accessToken)
+    console.log(cards.paypalCustomerId)
+    const ressss = await fetch("https://api-m.paypal.com/v2/checkout/orders", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
       },
-      purchase_units
+      body: JSON.stringify({
+        intent: "CAPTURE",
+        payment_source: {
+          token: {
+            id: cards.paypalToken,       // ✅ Your saved token from DB
+            type: "PAYMENT_METHOD_TOKEN",
+          },
+        },
+        purchase_units
+      }),
     });
 
-    console.log('PayPal Card Payment Request Data:', {
-      countryCode,
-      finalTotal,
-      finalItemTotal,
-      finalShipping,
-      finalTax
-    });
-
-    const order = await client().execute(request);
-    console.log(order)
-    if (order.result.status !== 'COMPLETED') {
-      const captureRequest = new checkoutNodeJssdk.orders.OrdersCaptureRequest(order.result.id);
-      captureRequest.requestBody({});
-
-      const capture = await client().execute(captureRequest);
-
-      console.log('Capture Response:', capture.result);
-
-      if (capture.result.status !== 'COMPLETED') {
-        return res.status(400).json({
-          status: false,
-          message: 'Payment not completed',
-          data: capture.result
-        });
-      }
+    const order = await ressss.json();
+    if (!ressss.ok) {
+      return res.status(404).json({
+        status: false,
+        message: 'Invalid card'
+      });
     }
+
+    const ress = await fetch(
+      `https://api-m.paypal.com/v2/checkout/orders/${order.id}/capture`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+        },
+      }
+    );
+
+    const data = await ress.json();
+
+    console.log(data)
+
+    const captureStatus = data?.purchase_units?.[0]?.payments?.captures?.[0];
+    console.log(captureStatus)
+    if (captureStatus.status !== 'COMPLETED') {
+      return res.status(400).json({
+        status: false,
+        message: 'Please check your card details',
+        data: captureStatus
+      });
+    }
+
+    // request.requestBody({
+    //   intent: 'CAPTURE',
+    //   // payment_source: {
+    //   //   card: {
+    //   //     number: cardNumber,
+    //   //     expiry: `20${expYear}-${expMonth.padStart(2, '0')}`,
+    //   //     security_code: card.cvv,
+    //   //     name: card.name || 'Card Holder',
+    //   //     billing_address: {
+    //   //       address_line_1: shipping_address.address || '123 Main St',
+    //   //       admin_area_2: shipping_address.city || 'New York',
+    //   //       admin_area_1: shipping_address.state || 'NY',
+    //   //       postal_code: shipping_address.pinCode || '10001',
+    //   //       country_code: countryCode
+    //   //     },
+    //   //     attributes: {
+    //   //       verification: {
+    //   //         method: "SCA_ALWAYS"
+    //   //       }
+    //   //     }
+    //   //   }
+    //   // },
+    //   payment_source: {
+    //     token: {
+    //       id: cards.paypalToken,  // ← Use the token!
+    //       type: 'PAYMENT_METHOD_TOKEN'
+    //     }
+    //   },
+    //   purchase_units
+    // });
+
+    // console.log('PayPal Card Payment Request Data:', {
+    //   countryCode,
+    //   finalTotal,
+    //   finalItemTotal,
+    //   finalShipping,
+    //   finalTax
+    // });
+
+    // const order = await client().execute(request);
+    // console.log(order)
+    // if (order.result.status !== 'COMPLETED') {
+    //   const captureRequest = new checkoutNodeJssdk.orders.OrdersCaptureRequest(order.result.id);
+    //   captureRequest.requestBody({});
+
+    //   const capture = await client().execute(captureRequest);
+
+    //   console.log('Capture Response:', capture.result);
+
+    //   if (capture.result.status !== 'COMPLETED') {
+    //     return res.status(400).json({
+    //       status: false,
+    //       message: 'Payment not completed',
+    //       data: capture.result
+    //     });
+    //   }
+    // }
+
+
 
     // Save order to database
     // Group items by seller and create one order per seller
@@ -773,8 +829,8 @@ exports.processCardPaymentNew = async (req, res) => {
         finalAmount: groupFinalAmount,
         paymentmode: 'card',
         status: 'Pending',
-        paypalOrderId: order.result.id,
-        paypalStatus: order.result.status,
+        paypalOrderId: order.id,
+        paypalStatus: order.status,
         userCurrency: userCurrency || 'USD',
         currencySymbol: currencySymbol || '$',
         exchangeRate: exchangeRate || 1,
@@ -807,8 +863,8 @@ exports.processCardPaymentNew = async (req, res) => {
       message: 'Payment processed successfully',
       orderId: savedOrders[0]._id,
       orderIds: savedOrders.map(o => o._id),
-      paypalOrderId: order.result.id,
-      data: order.result
+      paypalOrderId: order.id,
+      data: order
     });
 
   } catch (error) {
