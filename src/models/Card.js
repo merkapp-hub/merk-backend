@@ -51,7 +51,7 @@ const cardSchema = new mongoose.Schema({
   cardType: {
     type: String,
     required: true,
-    enum: ['Visa', 'Mastercard', 'American Express', 'Discover', 'Card']
+    // enum: ['Visa', 'Mastercard', 'American Express', 'Discover', 'Card', ""]
   },
   isDefault: {
     type: Boolean,
