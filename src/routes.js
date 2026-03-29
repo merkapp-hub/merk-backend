@@ -28,9 +28,9 @@ module.exports = (app) => {
   app.get("/", (req, res) => {
     res.send("API running");
   });
-  app.use((req, res, next) => {
-    return response.notFound(res, { message: "Estamos con dificultades técnicas, estamos solucionando para que puedas comprar sin problema" });
-  });
+  // app.use((req, res, next) => {
+  //   return response.notFound(res, { message: "Estamos con dificultades técnicas, estamos solucionando para que puedas comprar sin problema" });
+  // });
   app.use('/api/auth', authRoutes);
   app.use('/api', blogsRoutes);
   app.use('/api', categoryRoutes);
