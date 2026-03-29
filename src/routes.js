@@ -29,7 +29,7 @@ module.exports = (app) => {
     res.send("API running");
   });
   app.use((req, res, next) => {
-    return response.unAuthorize(res, { message: "Estamos con dificultades técnicas, estamos solucionando para que puedas comprar sin problema" });
+    return response.notFound(res, { message: "Estamos con dificultades técnicas, estamos solucionando para que puedas comprar sin problema" });
   });
   app.use('/api/auth', authRoutes);
   app.use('/api', blogsRoutes);
