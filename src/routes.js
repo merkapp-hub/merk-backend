@@ -29,13 +29,11 @@ module.exports = (app) => {
     res.send("API running");
   });
 
+  app.use('/api/auth', authRoutes);
 
-
-  app.use('/api/v2/auth', authRoutes);
-
-  app.use('/api/auth', (req, res, next) => {
-    return response.unAuthorize(res, { message: "Estamos con dificultades técnicas, estamos solucionando para que puedas comprar sin problema" });
-  });
+  // app.use('/api/auth', (req, res, next) => {
+  //   return response.unAuthorize(res, { message: "Estamos con dificultades técnicas, estamos solucionando para que puedas comprar sin problema" });
+  // });
   app.use('/api', blogsRoutes);
   app.use('/api', categoryRoutes);
   app.use('/api', contentManagementRoutes);
