@@ -686,6 +686,7 @@ exports.processCardPaymentNew = async (req, res) => {
     });
 
     const order = await ressss.json();
+    console.log('order=====>', order)
     if (!ressss.ok) {
       return res.status(404).json({
         status: false,
@@ -693,29 +694,55 @@ exports.processCardPaymentNew = async (req, res) => {
       });
     }
 
-    const ress = await fetch(
-      `https://api-m.paypal.com/v2/checkout/orders/${order.id}/capture`,
+    const paymentstatus = await fetch(
+      `https://api-m.paypal.com/v2/checkout/orders/${order.id}`,
       {
-        method: "POST",
+        method: "GET",
         headers: {
           Authorization: `Bearer ${accessToken}`,
+          // 'PayPal-Request-Id': '7b92603e-77ed-4896-8e78-5dea2050476a',
           "Content-Type": "application/json",
         },
       }
     );
 
-    const data = await ress.json();
 
-    console.log(data)
 
-    const captureStatus = data?.purchase_units?.[0]?.payments?.captures?.[0];
-    console.log(captureStatus)
-    if (captureStatus.status !== 'COMPLETED') {
-      return res.status(400).json({
+    const finalStatus = await paymentstatus.json();
+    console.log('paymentstatus=====>', finalStatus)
+
+    if (!paymentstatus.ok) {
+      return res.status(404).json({
         status: false,
-        message: 'Please check your card details',
-        data: captureStatus
+        message: 'Invalid card'
       });
+    }
+
+    if (finalStatus.status !== 'COMPLETED') {
+      const ress = await fetch(
+        `https://api-m.paypal.com/v2/checkout/orders/${order.id}/capture`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      const data = await ress.json();
+
+      console.log(data)
+
+      const captureStatus = data?.purchase_units?.[0]?.payments?.captures?.[0];
+      console.log(captureStatus)
+      if (!captureStatus || captureStatus.status !== 'COMPLETED') {
+        return res.status(400).json({
+          status: false,
+          message: 'Please check your card details',
+          data: captureStatus
+        });
+      }
     }
 
     // request.requestBody({
