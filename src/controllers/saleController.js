@@ -6,7 +6,7 @@ module.exports = {
   createFlashSale: async (req, res) => {
     try {
       const payload = req?.body || {};
-      
+
       console.log('=== CREATE FLASH SALE ===');
       console.log('Received payload:', JSON.stringify(payload, null, 2));
       console.log('Products in payload:', payload.products);
@@ -41,7 +41,7 @@ module.exports = {
 
       const sale = new FlashSale(payload);
       const flashSale = await sale.save();
-      
+
       console.log('Saved flash sale:', flashSale);
       console.log('Saved products:', flashSale.products);
       console.log('Saved products count:', flashSale.products?.length);
@@ -62,89 +62,89 @@ module.exports = {
     }
   },
 
- getFlashSale: async (req, res) => {
-  try {
-    const SellerId = req.query.SellerId;
-    console.log('Getting flash sale for seller:', SellerId);
-    
-    if (!SellerId) {
-      return res.status(400).json({
+  getFlashSale: async (req, res) => {
+    try {
+      const SellerId = req.query.SellerId;
+      console.log('Getting flash sale for seller:', SellerId);
+
+      if (!SellerId) {
+        return res.status(400).json({
+          success: false,
+          message: "Seller ID is required",
+        });
+      }
+
+      const flashSales = await FlashSale.find({ SellerId })
+        .sort({ createdAt: -1 })
+        .populate({
+          path: "products",
+          match: { is_verified: true },
+          populate: {
+            path: "category",
+            select: "name slug"
+          }
+        });
+
+      console.log('Found flash sales:', flashSales.length);
+
+      return res.status(200).json({
+        success: true,
+        status: true,
+        data: flashSales,
+        message: "Flash sales retrieved successfully"
+      });
+    } catch (error) {
+      console.error('getFlashSale error:', error);
+      return res.status(500).json({
         success: false,
-        message: "Seller ID is required",
+        message: error.message || "Internal server error"
       });
     }
+  },
+  getFlashSaleBySlug: async (req, res) => {
+    try {
+      const { slug } = req.params;
 
-    const flashSales = await FlashSale.find({ SellerId })
-      .sort({ createdAt: -1 })
-      .populate({
+      console.log("Received slug:", slug);
+
+      if (!slug) {
+        return res.status(400).json({
+          success: false,
+          message: "Slug is required",
+        });
+      }
+
+      const allFlashSales = await FlashSale.find({}, 'slug');
+      console.log("Available slugs:", allFlashSales.map(sale => sale.slug)); // Debug log
+
+      const flashSale = await FlashSale.findOne({ slug }).populate({
         path: "products",
-        match: { is_verified: true },
-        populate: {
-          path: "category",
-          select: "name slug" 
-        }
+        match: { is_verified: true }
       });
 
-    console.log('Found flash sales:', flashSales.length);
+      console.log("Found flash sale:", flashSale ? "Yes" : "No"); // Debug log
 
-    return res.status(200).json({
-      success: true,
-      status: true,
-      data: flashSales,
-      message: "Flash sales retrieved successfully"
-    });
-  } catch (error) {
-    console.error('getFlashSale error:', error);
-    return res.status(500).json({
-      success: false,
-      message: error.message || "Internal server error"
-    });
-  }
-},
-getFlashSaleBySlug: async (req, res) => {
-  try {
-    const { slug } = req.params;
-    
-    console.log("Received slug:", slug); 
-    
-    if (!slug) {
-      return res.status(400).json({
+      if (!flashSale) {
+        return res.status(404).json({
+          success: false,
+          message: "Flash sale not found",
+        });
+      }
+
+      return res.status(200).json({
+        success: true,
+        data: flashSale,
+        message: "Flash sale retrieved successfully",
+      });
+    } catch (error) {
+      console.error("Error in getFlashSaleBySlug:", error); // Debug log
+      return res.status(500).json({
         success: false,
-        message: "Slug is required",
+        message: "Something went wrong",
+        error,
       });
     }
-    
-    const allFlashSales = await FlashSale.find({}, 'slug');
-    console.log("Available slugs:", allFlashSales.map(sale => sale.slug)); // Debug log
-    
-    const flashSale = await FlashSale.findOne({ slug }).populate({
-      path: "products",
-      match: { is_verified: true }
-    });
-    
-    console.log("Found flash sale:", flashSale ? "Yes" : "No"); // Debug log
-    
-    if (!flashSale) {
-      return res.status(404).json({
-        success: false,
-        message: "Flash sale not found",
-      });
-    }
-    
-    return res.status(200).json({
-      success: true,
-      data: flashSale,
-      message: "Flash sale retrieved successfully",
-    });
-  } catch (error) {
-    console.error("Error in getFlashSaleBySlug:", error); // Debug log
-    return res.status(500).json({
-      success: false,
-      message: "Something went wrong",
-      error,
-    });
-  }
-},
+  },
 
   deleteFlashSaleProduct: async (req, res) => {
     try {
@@ -231,6 +231,55 @@ getFlashSaleBySlug: async (req, res) => {
       const flashSales = await FlashSale.aggregate([
         { $sort: { createdAt: -1 } },
         {
+          $lookup: {
+            from: "products",
+            localField: "products",
+            foreignField: "_id",
+            as: "products",
+            pipeline: [
+              {
+                $match: { is_verified: true },
+              },
+              {
+                $lookup: {
+                  from: "reviews",
+                  let: { productId: "$_id" },
+                  pipeline: [
+                    {
+                      $match: {
+                        $expr: { $eq: ["$product", "$$productId"] }
+                      }
+                    },
+                    {
+                      $group: {
+                        _id: null,
+                        reviewCount: { $sum: 1 },
+                        averageRating: { $avg: "$rating" }
+                      }
+                    }
+                  ],
+                  as: "reviewStats"
+                }
+              },
+              {
+                $addFields: {
+                  reviewCount: {
+                    $ifNull: [{ $arrayElemAt: ["$reviewStats.reviewCount", 0] }, 0]
+                  },
+                  averageRating: {
+                    $ifNull: [{ $arrayElemAt: ["$reviewStats.averageRating", 0] }, 0]
+                  }
+                }
+              },
+              {
+                $project: {
+                  reviewStats: 0 // ❌ remove temp field
+                }
+              }
+            ],
+          }
+        },
+        {
           $group: {
             _id: "$SellerId",
             flashSale: { $first: "$$ROOT" }
@@ -238,17 +287,17 @@ getFlashSaleBySlug: async (req, res) => {
         }
       ]);
 
-      const populatedFlashSales = await FlashSale.populate(
-        flashSales.map(f => f.flashSale),
-        { 
-          path: "products",
-          match: { is_verified: true }
-        }
-      );
+      // const populatedFlashSales = await FlashSale.populate(
+      //   flashSales.map(f => f.flashSale),
+      //   {
+      //     path: "products",
+      //     match: { is_verified: true }
+      //   }
+      // );
 
       return res.status(200).json({
         success: true,
-        data: populatedFlashSales,
+        data: flashSales.map(f => f.flashSale),
         message: "Flash sales retrieved successfully",
       });
     } catch (error) {
@@ -263,7 +312,7 @@ getFlashSaleBySlug: async (req, res) => {
   getSaleById: async (req, res) => {
     try {
       const { id } = req.params;
-      
+
       // Populate products with their category information
       const sale = await FlashSale.findById(id).populate({
         path: 'products',
@@ -273,7 +322,7 @@ getFlashSaleBySlug: async (req, res) => {
           select: 'name slug'
         }
       });
-      
+
       if (!sale) {
         return res.status(404).json({
           success: false,
@@ -303,9 +352,9 @@ getFlashSaleBySlug: async (req, res) => {
   updateSale: async (req, res) => {
     try {
       const { saleId, ...updateData } = req.body;
-      
+
       console.log('Update Sale Request:', { saleId, updateData });
-      
+
       if (!saleId) {
         return res.status(400).json({
           success: false,
@@ -317,7 +366,7 @@ getFlashSaleBySlug: async (req, res) => {
       if (updateData.startDateTime && updateData.endDateTime) {
         const startDate = new Date(updateData.startDateTime);
         const endDate = new Date(updateData.endDateTime);
-        
+
         if (endDate <= startDate) {
           return res.status(400).json({
             success: false,

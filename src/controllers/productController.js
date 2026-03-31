@@ -214,6 +214,20 @@ module.exports = {
         { $limit: limit },
         {
           $lookup: {
+            from: "reviews",
+            localField: "_id",
+            foreignField: "product",
+            as: "reviews"
+          }
+        },
+        {
+          $addFields: {
+            reviewCount: { $size: "$reviews" },
+            averageRating: { $avg: "$reviews.rating" }
+          }
+        },
+        {
+          $lookup: {
             from: "categories",
             localField: "category",
             foreignField: "_id",
@@ -241,7 +255,9 @@ module.exports = {
             is_verified: 1,
             sponsered: 1,
             createdAt: 1,
-            userid: 1
+            userid: 1,
+            reviewCount: 1,
+            averageRating: 1
           }
         }
       ]);
@@ -391,11 +407,64 @@ module.exports = {
   getProductbycategory: async (req, res) => {
     try {
       const { page = 1, limit = 20 } = req.query;
-      let product = await Product.find({ category: req.params.id, is_verified: true })
-        .populate("category")
-        .sort({ createdAt: -1 })
-        .limit(limit * 1)
-        .skip((page - 1) * limit);
+      // let product = await Product.find({ category: req.params.id, is_verified: true })
+      //   .populate("category")
+      //   .sort({ createdAt: -1 })
+      //   .limit(limit * 1)
+      //   .skip((page - 1) * limit);
+
+      const product = await Product.aggregate([
+        {
+          $match: {
+            category: new mongoose.Types.ObjectId(req.params.id),
+            is_verified: true
+          }
+        },
+        {
+          $lookup: {
+            from: "reviews",
+            localField: "_id",
+            foreignField: "product",
+            as: "reviews"
+          }
+        },
+        {
+          $addFields: {
+            reviewCount: { $size: "$reviews" },
+            averageRating: { $avg: "$reviews.rating" }
+          }
+        },
+        {
+          $lookup: {
+            from: "categories", // collection name (IMPORTANT)
+            localField: "category",
+            foreignField: "_id",
+            as: "category"
+          }
+        },
+        {
+          $unwind: {
+            path: "$category",
+            preserveNullAndEmptyArrays: true // like populate (optional)
+          }
+        },
+        {
+          $sort: { createdAt: -1 }
+        },
+        {
+          $skip: (page - 1) * limit
+        },
+        {
+          $limit: limit * 1
+        },
+        {
+          $project: {
+            reviewStats: 0 // ❌ remove temp field
+          }
+        }
+      ]);
+
+      return response.success(res, product);
       return response.success(res, product);
     } catch (error) {
       return response.error(res, error);
@@ -1644,6 +1713,20 @@ module.exports = {
         { $limit: limit },
         {
           $lookup: {
+            from: "reviews",
+            localField: "_id",
+            foreignField: "product",
+            as: "reviews"
+          }
+        },
+        {
+          $addFields: {
+            reviewCount: { $size: "$reviews" },
+            averageRating: { $avg: "$reviews.rating" }
+          }
+        },
+        {
+          $lookup: {
             from: "categories",
             localField: "category",
             foreignField: "_id",
@@ -1670,7 +1753,9 @@ module.exports = {
             varients: 1,
             is_verified: 1,
             sponsered: 1,
-            createdAt: 1
+            createdAt: 1,
+            reviewCount: 1,
+            averageRating: 1
           }
         }
       ]);
@@ -3062,9 +3147,9 @@ module.exports = {
       console.log(`🔄 Using currency symbol: "${pdfSafeSymbol}" (${userCurrency})`);
 
       // Helper function to convert and format price
-    const formatPrice = (priceInUSD) => {
-  const converted = parseFloat((priceInUSD * exchangeRate).toFixed(2));
-  const formatted = `${pdfSafeSymbol} ${converted.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+      const formatPrice = (priceInUSD) => {
+        const converted = parseFloat((priceInUSD * exchangeRate).toFixed(2));
+        const formatted = `${pdfSafeSymbol} ${converted.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
         console.log(`💱 Converting: $${priceInUSD} → ${formatted} (rate: ${exchangeRate}, symbol: "${currencySymbol}" → "${pdfSafeSymbol}")`);
         return formatted;
       };
