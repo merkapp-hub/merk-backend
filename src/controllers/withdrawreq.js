@@ -3,6 +3,7 @@ const response = require("./../responses");
 const Withdrawreq = require("@models/Withdrawreq");
 const User = require("@models/User");
 const paypalPayoutService = require("@services/paypalPayoutService");
+const { saveErrorLog } = require("@responses/error");
 
 module.exports = {
   createWithdrawreq: async (req, res) => {
@@ -200,6 +201,12 @@ module.exports = {
           await Withdrawreq.findByIdAndUpdate(id, {
             settle: 'Rejected',
             note: `${withdrawdata.note || ''} - PayPal Error: ${payoutResult.error}`
+          });
+
+          saveErrorLog(req, new Error(payoutResult.error || 'Payout failed'), {
+            source: 'paypal_payout',
+            statusCode: 400,
+            meta: { action: 'approveWithdrawal', withdrawalId: id },
           });
 
           return res.status(400).json({

@@ -5,6 +5,7 @@ const Card = require('@models/Card');
 const oneSignalService = require('../services/oneSignalService');
 const { default: axios } = require('axios');
 const { default: mongoose } = require('mongoose');
+const { saveErrorLog } = require('@responses/error');
 
 
 // Create PayPal Order
@@ -120,6 +121,7 @@ exports.createOrder = async (req, res) => {
     });
 
   } catch (error) {
+    saveErrorLog(req, error, { source: 'paypal', statusCode: 500, meta: { action: 'createOrder' } });
     res.status(500).json({
       status: false,
       message: 'Failed to create PayPal order',
@@ -174,6 +176,7 @@ exports.captureOrder = async (req, res) => {
       error.message?.includes('CARD_DECLINED') ||
       error.message?.includes('INSTRUMENT_DECLINED');
 
+    saveErrorLog(req, error, { source: 'paypal', statusCode: error.statusCode || 500, meta: { action: 'captureOrder' } });
     res.status(error.statusCode || 500).json({
       status: false,
       message: isCardDeclined ? 'Card was declined. Please use a valid payment method.' : 'Failed to capture PayPal payment',
@@ -204,6 +207,7 @@ exports.getOrderDetails = async (req, res) => {
     });
 
   } catch (error) {
+    saveErrorLog(req, error, { source: 'paypal', statusCode: 500, meta: { action: 'getOrderDetails' } });
     res.status(500).json({
       status: false,
       message: 'Failed to get order details',
@@ -242,6 +246,7 @@ exports.refundPayment = async (req, res) => {
 
   } catch (error) {
     console.error('PayPal Refund Error:', error);
+    saveErrorLog(req, error, { source: 'paypal', statusCode: 500, meta: { action: 'refundPayment' } });
     res.status(500).json({
       status: false,
       message: 'Failed to process refund',
@@ -538,6 +543,7 @@ exports.processCardPayment = async (req, res) => {
       }
     }
 
+    saveErrorLog(req, error, { source: 'paypal', statusCode, meta: { action: 'processCardPayment' } });
     res.status(statusCode).json({
       status: false,
       message: errorMessage,
@@ -925,6 +931,7 @@ exports.processCardPaymentNew = async (req, res) => {
       }
     }
 
+    saveErrorLog(req, error, { source: 'paypal', statusCode, meta: { action: 'processCardPaymentNew' } });
     res.status(statusCode).json({
       status: false,
       message: errorMessage,
@@ -986,6 +993,7 @@ exports.setupToken = async (req, res) => {
     });
   } catch (error) {
     console.error('Setup token error:', error.response?.data || error.message);
+    saveErrorLog(req, error, { source: 'paypal', statusCode: 500, meta: { action: 'createSetupToken' } });
     res.status(500).json({ error: 'Failed to create setup token' });
   }
 
@@ -1055,8 +1063,8 @@ exports.savePaymentToken = async (req, res) => {
     });
   } catch (error) {
     console.error('Payment token error:', error.response?.data || error.message);
+    saveErrorLog(req, error, { source: 'paypal', statusCode: 500, meta: { action: 'savePaymentToken' } });
     res.status(500).json({ error: 'Failed to save card' });
-    console.log(error)
   }
 }
 

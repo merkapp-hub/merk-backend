@@ -47,9 +47,23 @@ app.get("/", (req, res) => {
 });
 
 // Global Error Handler
+const ErrorLog = require('@models/ErrorLog');
 app.use((err, req, res, next) => {
   console.error(err.stack);
-  res.status(500).json({ error: "Something went wrong!" });
+
+  ErrorLog.create({
+    method: req?.method,
+    endpoint: req?.originalUrl,
+    statusCode: err?.status || 500,
+    errorName: err?.name || 'Error',
+    message: err?.message || 'Something went wrong',
+    stack: err?.stack || null,
+    userId: req?.user?._id || req?.user?.id || null,
+    ip: req?.ip || req?.headers?.['x-forwarded-for'] || null,
+    userAgent: req?.headers?.['user-agent'] || null,
+  }).catch((e) => console.error('ErrorLog save failed:', e.message));
+
+  res.status(err?.status || 500).json({ error: "Something went wrong!" });
 });
 
 module.exports = app;

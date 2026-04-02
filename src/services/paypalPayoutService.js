@@ -1,4 +1,5 @@
 const paypal = require('@paypal/payouts-sdk');
+const { saveErrorLog } = require('@responses/error');
 
 function environment() {
   const clientId = process.env.PAYPAL_CLIENT_ID;
@@ -53,6 +54,10 @@ async function createPayout(recipientEmail, amount, note, withdrawalId) {
     };
   } catch (error) {
     console.error('PayPal Payout Error:', error);
+    saveErrorLog(null, error, {
+      source: 'paypal_payout',
+      meta: { withdrawalId, recipientEmail, amount },
+    });
     return {
       success: false,
       error: error.message || 'Payout failed'
@@ -72,6 +77,10 @@ async function getPayoutStatus(payoutBatchId) {
     };
   } catch (error) {
     console.error('PayPal Get Payout Status Error:', error);
+    saveErrorLog(null, error, {
+      source: 'paypal_payout',
+      meta: { payoutBatchId },
+    });
     return {
       success: false,
       error: error.message || 'Failed to get payout status'
