@@ -696,7 +696,7 @@ exports.processCardPaymentNew = async (req, res) => {
     if (!ressss.ok) {
       return res.status(404).json({
         status: false,
-        message: 'Invalid card'
+        message: order.details?.[0]?.description || 'Invalid card or payment details',
       });
     }
 
@@ -720,7 +720,7 @@ exports.processCardPaymentNew = async (req, res) => {
     if (!paymentstatus.ok) {
       return res.status(404).json({
         status: false,
-        message: 'Invalid card'
+        message: order.details?.[0]?.description || 'Invalid card or payment details'
       });
     }
 
