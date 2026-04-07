@@ -134,7 +134,7 @@ module.exports = {
 updateStore: async (req, res) => {
         try {
             const payload = req?.body || {};
-            const { userid, companyName, logo } = payload;
+            const { userid, companyName, logo, status } = payload;
             
             if (!userid) {
                 return res.status(400).json({
@@ -143,7 +143,29 @@ updateStore: async (req, res) => {
                 });
             }
             
-            // Find store by userid
+            // If status is being updated, update User table
+            if (status) {
+                const User = require('@models/User');
+                const user = await User.findById(userid);
+                
+                if (!user) {
+                    return res.status(404).json({
+                        status: false,
+                        message: 'User not found'
+                    });
+                }
+                
+                user.status = status;
+                await user.save();
+                
+                return res.status(200).json({
+                    status: true,
+                    message: `Seller status updated to ${status} successfully`,
+                    data: user
+                });
+            }
+            
+            // Otherwise, update Store table (companyName, logo)
             const store = await Store.findOne({ userid });
             
             if (!store) {
