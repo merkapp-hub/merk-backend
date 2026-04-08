@@ -366,7 +366,7 @@ module.exports = {
 
       let d = {
         ...product._doc,
-        seller: product.userid, // Add seller info
+        seller: product.userid,
         rating: await getReview(product._id),
         reviews,
         favourite: favourite ? true : false
@@ -374,6 +374,46 @@ module.exports = {
 
       return response.success(res, d);
     } catch (error) {
+      return response.error(res, error);
+    }
+  },
+
+  getProductsByUserId: async (req, res) => {
+    try {
+      const { id: userId } = req.params;
+      const page = parseInt(req.query.page) || 1;
+      const limit = parseInt(req.query.limit) || 12;
+      const skip = (page - 1) * limit;
+
+      const query = {
+        userid: userId,
+        is_verified: true
+      };
+
+      const totalItems = await Product.countDocuments(query);
+      const totalPages = Math.ceil(totalItems / limit);
+
+      const products = await Product.find(query)
+        .populate("category", "name")
+        .populate("userid", "firstName lastName email companyName logo")
+        .sort({ createdAt: -1 })
+        .limit(limit)
+        .skip(skip);
+
+      const responseData = {
+        status: true,
+        data: products,
+        pagination: {
+          totalItems,
+          totalPages,
+          currentPage: page,
+          itemsPerPage: limit
+        }
+      };
+
+      return res.status(200).json(responseData);
+    } catch (error) {
+      console.error('getProductsByUserId error:', error);
       return response.error(res, error);
     }
   },
@@ -3154,12 +3194,28 @@ module.exports = {
         .fill('#12344D');
 
       const finalTotal = itemsTotal + taxAmount + deliveryCharge;
+      const formattedTotal = formatPrice(finalTotal);
+
+      console.log('📄 TOTAL AMOUNT DEBUG:', {
+        itemsTotal,
+        taxAmount,
+        deliveryCharge,
+        finalTotal,
+        formattedTotal,
+        pdfSafeSymbol,
+        exchangeRate
+      });
 
       doc.fontSize(12)
         .fillColor('#ffffff')
-        .text('Total Amount:', summaryX, yPosition + 5)
-        .fontSize(14)
-        .text(formatPrice(finalTotal), 480, yPosition + 5);
+        .text('Total Amount:', summaryX, yPosition + 8);
+      
+      doc.fontSize(14)
+        .fillColor('#ffffff')
+        .text(formattedTotal, 480, yPosition + 7, {
+          width: 100,
+          align: 'left'
+        });
 
       // Footer
       doc.fontSize(9)
