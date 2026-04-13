@@ -4582,6 +4582,49 @@ getProduct: async (req, res) => {
       console.error('Return/Cancel request error:', error);
       return response.error(res, error);
     }
+  },
+
+   // Get orders by seller ID for export
+  getOrdersBySellerId: async (req, res) => {
+    try {
+      const { id: sellerId } = req.params;
+
+      const orders = await ProductRequest.find({ seller_id: sellerId })
+        .populate('user', 'firstName lastName email number mobile')
+        .populate('productDetail.product', 'name images price')
+        .sort({ createdAt: -1 });
+
+      return res.status(200).json({
+        status: true,
+        data: orders
+      });
+    } catch (error) {
+      console.error('getOrdersBySellerId error:', error);
+      return response.error(res, error);
+    }
+  },
+
+  // Get returns by seller ID for export
+  getReturnsBySellerId: async (req, res) => {
+    try {
+      const { id: sellerId } = req.params;
+
+      const returns = await ProductRequest.find({
+        seller_id: sellerId,
+        'productDetail.returnDetails.isReturned': true
+      })
+        .populate('user', 'firstName lastName email number mobile')
+        .populate('productDetail.product', 'name images price')
+        .sort({ createdAt: -1 });
+
+      return res.status(200).json({
+        status: true,
+        data: returns
+      });
+    } catch (error) {
+      console.error('getReturnsBySellerId error:', error);
+      return response.error(res, error);
+    }
   }
 
-};
+}; 

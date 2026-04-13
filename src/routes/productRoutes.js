@@ -234,4 +234,8 @@ router.get("/:productId/delivery-label/print", authMiddleware(["admin", "seller"
 router.post("/notifications/send", authMiddleware(["admin", "seller"]), product.sendNotification);
 router.get("/notifications/history/:orderId", authMiddleware(["admin", "seller", "user"]), product.getNotificationHistory);
 
+// Export endpoints for seller reports
+router.get("/getOrdersBySellerId/:id", authMiddleware(["admin", "seller"]), product.getOrdersBySellerId);
+router.get("/getReturnsBySellerId/:id", authMiddleware(["admin", "seller"]), product.getReturnsBySellerId);
+
 module.exports = router;

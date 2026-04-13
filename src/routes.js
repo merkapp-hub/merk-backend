@@ -22,6 +22,7 @@ const cartRoutes = require('@routes/cartRoutes')
 const addressRoutes = require('@routes/addressRoutes')
 const cardRoutes = require('@routes/cardRoutes')
 const userRoutes = require('@routes/userRoutes')
+const exportRoutes = require('@routes/exportRoutes')
 
 module.exports = (app) => {
   app.get("/", (req, res) => {
@@ -51,4 +52,5 @@ module.exports = (app) => {
   app.use('/api', addressRoutes)
   app.use('/api', cardRoutes)
   app.use('/api', userRoutes)
+  app.use('/api/export', exportRoutes)
 };
