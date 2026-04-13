@@ -240,7 +240,10 @@ module.exports = {
         .reduce((acc, item) => acc + item.totalSales, 0);
 
       const productIds = sales.map((item) => item._id);
-      const products = await Product.find({ _id: { $in: productIds } }).lean();
+      const products = await Product.find({ 
+        _id: { $in: productIds },
+        isDeleted: false  // Only fetch non-deleted products
+      }).lean();
 
       const productNameMap = products.reduce((map, product) => {
         map[product._id.toString()] = product.name;

@@ -17,7 +17,8 @@ module.exports = {
       const products = await Product.find({ 
         _id: { $in: productIds },
         is_verified: true,
-        status: "verified"
+        status: "verified",
+        isDeleted: false  // Only fetch non-deleted products
       }).populate("category", "name slug is_refundable");
 
  
@@ -148,7 +149,8 @@ module.exports = {
       const products = await Product.find({ 
         _id: { $in: productIds },
         is_verified: true,
-        status: "verified"
+        status: "verified",
+        isDeleted: false  // Only fetch non-deleted products
       }).populate("category", "name slug");
 
       const wishlistItems = products.map(product => ({

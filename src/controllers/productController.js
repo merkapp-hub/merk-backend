@@ -169,7 +169,7 @@ module.exports = {
     }
   },
 
-  getProduct: async (req, res) => {
+getProduct: async (req, res) => {
     try {
       const page = parseInt(req.query.page) || 1;
       const limit = parseInt(req.query.limit) || 12;
@@ -178,18 +178,20 @@ module.exports = {
 
       const cacheKey = `products_page${page}_limit${limit}_seller${req.query.seller_id || 'all'}`;
 
+      // Disable cache for random product ordering - each request should return different order
       // Check cache first
-      const cachedData = cache.get(cacheKey);
-      if (cachedData && (Date.now() - cachedData.timestamp) < CACHE_TTL) {
-        console.log('Returning cached products');
-        return res.status(200).json(cachedData.data);
-      }
+      // const cachedData = cache.get(cacheKey);
+      // if (cachedData && (Date.now() - cachedData.timestamp) < CACHE_TTL) {
+      //   console.log('Returning cached products');
+      //   return res.status(200).json(cachedData.data);
+      // }
 
 
       let query = {
-        // For non-admin users, only show verified and non-suspended products
+      
         status: "verified",
-        is_verified: true
+        is_verified: true,
+        isDeleted: false  // Only fetch non-deleted products
       };
 
       // For admin users, show all products except suspended ones by default
@@ -209,7 +211,9 @@ module.exports = {
 
       const products = await Product.aggregate([
         { $match: query },
-        { $sort: { createdAt: -1 } },
+        // Random shuffle: Add a random field and sort by it for dynamic ordering
+        { $addFields: { randomSort: { $rand: {} } } },
+        { $sort: { randomSort: 1 } },
         { $skip: skip },
         { $limit: limit },
         {
@@ -242,6 +246,7 @@ module.exports = {
             sponsered: 1,
             createdAt: 1,
             userid: 1
+            // randomSort field automatically excluded when not included in projection
           }
         }
       ]);
@@ -261,13 +266,13 @@ module.exports = {
         },
       };
 
-      // Cache the response
-      cache.set(cacheKey, {
-        data: responseData,
-        timestamp: Date.now()
-      });
+      // Cache disabled for random ordering
+      // cache.set(cacheKey, {
+      //   data: responseData,
+      //   timestamp: Date.now()
+      // });
 
-      console.log('Returning fresh products data');
+      console.log('Returning fresh randomized products data');
       return res.status(200).json(responseData);
     } catch (error) {
       console.error('getProduct error:', error);
@@ -282,7 +287,10 @@ module.exports = {
       // if (req.query.seller_id) {
       //     data.userid = req.query.seller_id
       // }
-      let product = await Product.find({ userid: req.user.id })
+      let product = await Product.find({ 
+        userid: req.user.id,
+        isDeleted: false  // Only fetch non-deleted products
+      })
         .sort({ createdAt: -1 })
         .limit(limit * 1)
         .skip((page - 1) * limit);
@@ -294,7 +302,11 @@ module.exports = {
 
   getSponseredProduct: async (req, res) => {
     try {
-      let data = { sponsered: true, is_verified: true };
+      let data = { 
+        sponsered: true, 
+        is_verified: true,
+        isDeleted: false  // Only fetch non-deleted products
+      };
       if (req.query.seller_id) {
         data.userid = req.query.seller_id;
       }
@@ -309,7 +321,10 @@ module.exports = {
 
   getProductByslug: async (req, res) => {
     try {
-      let product = await Product.findOne({ slug: req?.params?.id })
+      let product = await Product.findOne({ 
+        slug: req?.params?.id,
+        isDeleted: false  // Only fetch non-deleted products
+      })
         .populate("category", "name slug")
         .populate("userid", "firstName lastName email companyName logo");
 
@@ -347,7 +362,10 @@ module.exports = {
 
   getProductById: async (req, res) => {
     try {
-      let product = await Product.findById(req?.params?.id)
+      let product = await Product.findOne({
+        _id: req?.params?.id,
+        isDeleted: false  // Only fetch non-deleted products
+      })
         .populate("category", "name")
         .populate("userid", "firstName lastName email companyName logo");
 
@@ -387,7 +405,8 @@ module.exports = {
 
       const query = {
         userid: userId,
-        is_verified: true
+        is_verified: true,
+        isDeleted: false  // Only fetch non-deleted products
       };
 
       const totalItems = await Product.countDocuments(query);
@@ -420,9 +439,11 @@ module.exports = {
 
   compareProduct: async (req, res) => {
     try {
-      let product = await Product.find({ _id: { $in: req.body.ids }, is_verified: true }).populate(
-        "category"
-      );
+      let product = await Product.find({ 
+        _id: { $in: req.body.ids }, 
+        is_verified: true,
+        isDeleted: false  // Only fetch non-deleted products
+      }).populate("category");
       return response.success(res, product);
     } catch (error) {
       return response.error(res, error);
@@ -431,7 +452,11 @@ module.exports = {
   getProductbycategory: async (req, res) => {
     try {
       const { page = 1, limit = 20 } = req.query;
-      let product = await Product.find({ category: req.params.id, is_verified: true })
+      let product = await Product.find({ 
+        category: req.params.id, 
+        is_verified: true,
+        isDeleted: false  // Only fetch non-deleted products
+      })
         .populate("category")
         .sort({ createdAt: -1 })
         .limit(limit * 1)
@@ -448,25 +473,49 @@ module.exports = {
       let cond = {
         // For non-admin users, only show verified and non-suspended products
         status: "verified",
-        is_verified: true
+        is_verified: true,
+        isDeleted: false  // Only fetch non-deleted products
       };
 
       // For admin users, show all products except suspended ones by default
       if (req.user && req.user.role === 'admin') {
         delete cond.is_verified;
         delete cond.status;
+        // Admin can see deleted products only if explicitly requested
+        if (req.query.include_deleted !== 'true') {
+          cond.isDeleted = false;
+        } else {
+          delete cond.isDeleted;
+        }
         // Only filter out suspended products if not specifically requested
         if (req.query.include_suspended !== 'true') {
           cond.status = { $ne: 'suspended' };
         }
       }
 
-      // Filter by category
+      // Filter by category (supports multiple categories)
       if (req?.query?.category && req?.query?.category !== "all") {
-        const cat = await Category.findOne({
-          slug: req?.query?.category,
-        }).lean();
-        if (cat) cond.category = cat._id;
+        // Check if multiple categories (comma-separated)
+        const categoryParam = req.query.category;
+        
+        if (categoryParam.includes(',')) {
+          // Multiple categories
+          const categorySlugs = categoryParam.split(',').map(slug => slug.trim());
+          const categories = await Category.find({
+            slug: { $in: categorySlugs }
+          }).lean();
+          
+          if (categories && categories.length > 0) {
+            const categoryIds = categories.map(cat => cat._id);
+            cond.category = { $in: categoryIds };
+          }
+        } else {
+          // Single category
+          const cat = await Category.findOne({
+            slug: categoryParam,
+          }).lean();
+          if (cat) cond.category = cat._id;
+        }
       }
 
       // Exclude specific product
@@ -549,7 +598,8 @@ module.exports = {
     try {
       let cond = {
         theme: { $in: [req?.params?.id] },
-        is_verified: true
+        is_verified: true,
+        isDeleted: false  // Only fetch non-deleted products
       };
       let sort_by = {};
       if (req.query.is_top) {
@@ -602,6 +652,7 @@ module.exports = {
   getColors: async (req, res) => {
     try {
       let product = await Product.aggregate([
+        { $match: { isDeleted: false } },  // Only fetch non-deleted products
         { $unwind: "$varients" },
         {
           $group: {
@@ -736,7 +787,10 @@ module.exports = {
     try {
       const { productId, orderId, customerName, customerAddress, customerPhone } = req.body;
 
-      const product = await Product.findById(productId);
+      const product = await Product.findOne({
+        _id: productId,
+        isDeleted: false  // Only fetch non-deleted products
+      });
       if (!product) {
         return response.error(res, { message: 'Product not found' }, 404);
       }
@@ -776,7 +830,10 @@ module.exports = {
   printDeliveryLabel: async (req, res) => {
     try {
       const { productId } = req.params;
-      const product = await Product.findById(productId);
+      const product = await Product.findOne({
+        _id: productId,
+        isDeleted: false  // Only fetch non-deleted products
+      });
 
       if (!product || !product.deliveryLabel) {
         return response.error(res, { message: 'Delivery label not found' }, 404);
@@ -839,7 +896,11 @@ module.exports = {
 
   topselling: async (req, res) => {
     try {
-      let product = await Product.find({ is_top: true, is_verified: true });
+      let product = await Product.find({ 
+        is_top: true, 
+        is_verified: true,
+        isDeleted: false  // Only fetch non-deleted products
+      });
       return response.success(res, product);
     } catch (error) {
       return response.error(res, error);
@@ -848,7 +909,11 @@ module.exports = {
 
   getnewitem: async (req, res) => {
     try {
-      let product = await Product.find({ is_new: true, is_verified: true });
+      let product = await Product.find({ 
+        is_new: true, 
+        is_verified: true,
+        isDeleted: false  // Only fetch non-deleted products
+      });
       return response.success(res, product);
     } catch (error) {
       return response.error(res, error);
@@ -857,8 +922,12 @@ module.exports = {
 
   deleteProduct: async (req, res) => {
     try {
-      await Product.findByIdAndDelete(req?.params?.id);
-      return response.success(res, { meaasge: "Deleted successfully" });
+      // Soft delete - mark as deleted instead of removing from database
+      await Product.findByIdAndUpdate(req?.params?.id, {
+        isDeleted: true,
+        deletedAt: new Date()
+      });
+      return response.success(res, { message: "Product deleted successfully" });
     } catch (error) {
       return response.error(res, error);
     }
@@ -887,9 +956,10 @@ module.exports = {
       const sellerOrders = {};
 
       const productIds = payload.productDetail.map((item) => item.product);
-      const products = await Product.find({ _id: { $in: productIds } }).select(
-        "category"
-      );
+      const products = await Product.find({ 
+        _id: { $in: productIds },
+        isDeleted: false  // Only fetch non-deleted products
+      }).select("category");
       const categoryIds = products.map((p) => p.category);
       const categories = await Category.find({
         _id: { $in: categoryIds },
@@ -1215,7 +1285,10 @@ module.exports = {
       const productIds = payload.productDetail.map((item) => item.product);
 
 
-      const products = await Product.find({ _id: { $in: productIds } }).select("category").lean();
+      const products = await Product.find({ 
+        _id: { $in: productIds },
+        isDeleted: false  // Only fetch non-deleted products
+      }).select("category").lean();
 
 
       const categoryIds = products.map((p) => p.category);
@@ -1668,7 +1741,8 @@ module.exports = {
       const query = {
         status: "verified",
         is_verified: true,  // Only show verified products
-        sold_pieces: { $gt: 0 }
+        sold_pieces: { $gt: 0 },
+        isDeleted: false  // Only fetch non-deleted products
       };
 
       // For admin users, show all products regardless of verification status
@@ -1768,7 +1842,8 @@ module.exports = {
       const products = await Product.aggregate([
         {
           $match: {
-            userid: new mongoose.Types.ObjectId(sellerId)
+            userid: new mongoose.Types.ObjectId(sellerId),
+            isDeleted: false  // Only fetch non-deleted products
           }
         },
         { $sort: { createdAt: -1 } },
@@ -2212,7 +2287,10 @@ module.exports = {
           if (!obj.seller_id && obj.productDetail?.length > 0) {
             const firstProductId = obj.productDetail[0]?.product?._id || obj.productDetail[0]?.product;
             if (firstProductId) {
-              const prod = await Product.findById(firstProductId).select("userid").populate("userid", "-password").lean();
+              const prod = await Product.findOne({
+                _id: firstProductId,
+                isDeleted: false  // Only fetch non-deleted products
+              }).select("userid").populate("userid", "-password").lean();
               if (prod?.userid) {
                 obj.seller_id = prod.userid;
               }
@@ -2428,7 +2506,14 @@ module.exports = {
       let limit = parseInt(req.query.limit) || 10;
       let skip = (page - 1) * limit;
 
-      let query = {};
+      let query = {
+        isDeleted: false  // Only fetch non-deleted products by default
+      };
+
+      // Admin can see deleted products if explicitly requested
+      if (req.query.include_deleted === 'true') {
+        delete query.isDeleted;
+      }
 
       // Add seller_id filter if provided
       if (req.query.seller_id) {
@@ -2651,6 +2736,7 @@ module.exports = {
       const { page = 1, limit = 20 } = req.query;
       let cond = {
         is_verified: true,
+        isDeleted: false,  // Only fetch non-deleted products
         $or: [
           { name: { $regex: req.query.key, $options: "i" } },
           { categoryName: { $regex: req.query.key, $options: "i" } },
@@ -2823,14 +2909,24 @@ module.exports = {
     try {
       const { page = 1, limit = 20 } = req.query;
       const userId = req.user.id;
+      
+      // Calculate skip for pagination
+      const pageNum = parseInt(page);
+      const limitNum = parseInt(limit);
+      const skip = (pageNum - 1) * limitNum;
 
-      // Get orders for the user
+      // Get total count for pagination
+      const totalOrders = await ProductRequest.countDocuments({ user: userId });
+      const totalPages = Math.ceil(totalOrders / limitNum);
+
+      // Get orders for the user with pagination
       const orders = await ProductRequest.find({ user: userId })
         .populate({
           path: "productDetail.product",
           select: "name price image"
         })
-        .limit(parseInt(limit))
+        .skip(skip)
+        .limit(limitNum)
         .sort({ createdAt: -1 })
         .lean();
 
@@ -2923,7 +3019,17 @@ module.exports = {
         return order;
       });
 
-      return response.success(res, ordersWithReviews);
+      return response.success(res, {
+        orders: ordersWithReviews,
+        pagination: {
+          currentPage: pageNum,
+          totalPages: totalPages,
+          totalOrders: totalOrders,
+          itemsPerPage: limitNum,
+          hasNextPage: pageNum < totalPages,
+          hasPrevPage: pageNum > 1
+        }
+      });
     } catch (error) {
       console.error('Error in getrequestProductbyuser:', error);
       return response.error(res, error);
@@ -3490,7 +3596,10 @@ module.exports = {
       }
 
       // Log current state before update
-      const currentProduct = await Product.findById(id);
+      const currentProduct = await Product.findOne({
+        _id: id,
+        isDeleted: false  // Only fetch non-deleted products
+      });
       console.log('Current product state:', {
         _id: currentProduct?._id,
         name: currentProduct?.name,
@@ -3565,7 +3674,8 @@ module.exports = {
 
       const products = await Product.find({
         'sale.sale_id': saleId,
-        'sale.is_active': true
+        'sale.is_active': true,
+        isDeleted: false  // Only fetch non-deleted products
       });
 
       return response.success(res, products);
@@ -4030,7 +4140,10 @@ module.exports = {
 
       // Find a user and a product for testing
       const user = await User.findOne({ role: 'user' }).limit(1);
-      const product = await Product.findOne({ is_verified: true }).limit(1);
+      const product = await Product.findOne({ 
+        is_verified: true,
+        isDeleted: false  // Only fetch non-deleted products
+      }).limit(1);
 
       if (!user || !product) {
         return response.error(res, { message: "Need at least one user and one product to create test order" });

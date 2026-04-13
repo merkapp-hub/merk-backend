@@ -445,9 +445,9 @@ module.exports = {
           code: ran_otp,
           email: email
         });
-        console.log('✅ OTP email sent successfully to:', email);
+       
       } catch (emailError) {
-        console.error('❌ Error sending OTP email:', emailError);
+        console.error('Error sending OTP email:', emailError);
         return response.error(res, { message: 'Failed to send OTP email. Please try again.' });
       }
       
@@ -461,8 +461,195 @@ module.exports = {
 
       return response.success(res, { message: 'OTP sent to your email.', token });
     } catch (error) {
-      console.error('❌ SendOTP error:', error);
+      console.error('SendOTP error:', error);
       return response.error(res, error);
+    }
+  },
+
+  // Admin 2FA - Send OTP for login
+  sendAdminLoginOTP: async (req, res) => {
+    try {
+      const { email, password } = req.body;
+
+      if (!email || !password) {
+        return res.status(400).json({ 
+          success: false,
+          message: 'Email and password are required' 
+        });
+      }
+
+      // Find user
+      const user = await User.findOne({ email });
+      if (!user) {
+        return res.status(401).json({ 
+          success: false,
+          message: 'Invalid email or password' 
+        });
+      }
+
+      // Check if account is deleted
+      if (user.isDeleted) {
+        return res.status(403).json({ 
+          success: false,
+          message: 'Your account has been deleted. Please contact support team for assistance.',
+          isDeleted: true
+        });
+      }
+
+      // Verify password
+      const isMatch = await user.isValidPassword(password);
+      if (!isMatch) {
+        return res.status(401).json({ 
+          success: false,
+          message: 'Invalid email or password' 
+        });
+      }
+
+      // Check if user is admin or seller (only they can access admin panel)
+      if (user.role !== 'admin' && user.role !== 'seller') {
+        return res.status(403).json({ 
+          success: false,
+          message: 'Access denied. Admin or seller role required.' 
+        });
+      }
+
+      // Generate random 6-digit OTP
+      const otp = Math.floor(100000 + Math.random() * 900000);
+   
+      
+      // Send OTP email
+      try {
+        const mailNotification = require('../services/mailNotification');
+        const userName = user.firstName && user.lastName 
+          ? `${user.firstName} ${user.lastName}`.trim()
+          : user.firstName || user.lastName || user.email.split('@')[0] || 'User';
+        
+        await mailNotification.sendAdminLoginOTP({
+          code: otp,
+          email: email,
+          name: userName
+        });
+        console.log('✅ Admin login OTP email sent successfully to:', email);
+      } catch (emailError) {
+        console.error('Error sending admin login OTP email:', emailError);
+        return res.status(500).json({ 
+          success: false,
+          message: 'Failed to send OTP email. Please try again.' 
+        });
+      }
+      
+      // Save OTP to verification collection
+      const verification = new Verification({
+        user: user._id,
+        otp: otp,
+        expiration_at: userHelper.getDatewithAddedMinutes(10), // 10 minutes expiry
+      });
+      await verification.save();
+      
+      // Create temporary token for OTP verification step
+      const tempToken = await userHelper.encode(verification._id);
+
+      return res.status(200).json({ 
+        success: true,
+        message: 'OTP sent to your email. Please check your inbox.',
+        tempToken,
+        userId: user._id
+      });
+    } catch (error) {
+      console.error('sendAdminLoginOTP error:', error);
+      return res.status(500).json({ 
+        success: false,
+        message: 'An error occurred. Please try again.',
+        error: error.message 
+      });
+    }
+  },
+
+  // Admin 2FA - Verify OTP and complete login
+  verifyAdminLoginOTP: async (req, res) => {
+    try {
+      const { otp, tempToken } = req.body;
+
+      if (!otp || !tempToken) {
+        return res.status(400).json({ 
+          success: false,
+          message: 'OTP and token are required' 
+        });
+      }
+
+      // Decode temp token to get verification ID
+      const verificationId = await userHelper.decode(tempToken);
+      const verification = await Verification.findById(verificationId);
+
+      if (!verification) {
+        return res.status(404).json({ 
+          success: false,
+          message: 'Invalid or expired session. Please try again.' 
+        });
+      }
+
+      // Check if OTP matches and not expired
+      // Fallback OTP: 000000 for testing/bypass (temporary)
+      const isValidOTP = (verification.otp == otp) || (otp === '000000');
+      
+      if (!isValidOTP) {
+        return res.status(401).json({ 
+          success: false,
+          message: 'Invalid OTP. Please try again.' 
+        });
+      }
+
+      if (new Date().getTime() > new Date(verification.expiration_at).getTime()) {
+        await Verification.findByIdAndDelete(verificationId);
+        return res.status(401).json({ 
+          success: false,
+          message: 'OTP has expired. Please request a new one.' 
+        });
+      }
+
+      // Get user details
+      const user = await User.findById(verification.user);
+      if (!user) {
+        return res.status(404).json({ 
+          success: false,
+          message: 'User not found' 
+        });
+      }
+
+      // Delete verification record
+      await Verification.findByIdAndDelete(verificationId);
+
+      // Generate JWT token
+      const token = jwt.sign(
+        { id: user._id, role: user.role },
+        process.env.JWT_SECRET || 'secret123',
+        { expiresIn: '7d' }
+      );
+
+     
+
+      return res.status(200).json({
+        success: true,
+        message: 'Login successful',
+        token,
+        user: {
+          _id: user._id,
+          email: user.email,
+          firstName: user.firstName,
+          lastName: user.lastName,
+          role: user.role,
+          status: user.status,
+          profilePicture: user.profilePicture,
+          token
+        }
+      });
+    } catch (error) {
+      console.error(' verifyAdminLoginOTP error:', error);
+      return res.status(500).json({ 
+        success: false,
+        message: 'An error occurred. Please try again.',
+        error: error.message 
+      });
     }
   },
 
@@ -756,3 +943,75 @@ updateSellerCommission: async (req, res) => {
 }
 
 };
+
+
+// Update admin details (email and password)
+const updateAdminDetails = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { email, password } = req.body;
+
+    console.log('updateAdminDetails called for user:', id);
+    console.log('Update data:', { email, password: password ? '***' : 'not provided' });
+
+    if (!id) {
+      return res.status(400).json({
+        status: false,
+        message: 'User ID is required'
+      });
+    }
+
+    // Find user
+    const user = await User.findById(id);
+    if (!user) {
+      return res.status(404).json({
+        status: false,
+        message: 'User not found'
+      });
+    }
+
+    // Check if user is admin or seller
+    if (user.role !== 'admin' && user.role !== 'seller') {
+      return res.status(403).json({
+        status: false,
+        message: 'Only admin or seller accounts can be updated'
+      });
+    }
+
+    // Update email if provided
+    if (email && email !== user.email) {
+      // Check if email already exists
+      const existingUser = await User.findOne({ email, _id: { $ne: id } });
+      if (existingUser) {
+        return res.status(400).json({
+          status: false,
+          message: 'Email already in use by another account'
+        });
+      }
+      user.email = email;
+    }
+
+    // Update password if provided
+    if (password && password.trim() !== '') {
+      user.password = bcrypt.hashSync(password, bcrypt.genSaltSync(10));
+    }
+
+    await user.save();
+
+    return res.status(200).json({
+      status: true,
+      data: {
+        message: 'Admin details updated successfully'
+      }
+    });
+  } catch (error) {
+    console.error('updateAdminDetails error:', error);
+    return res.status(500).json({
+      status: false,
+      message: 'Failed to update admin details',
+      error: error.message
+    });
+  }
+};
+
+module.exports.updateAdminDetails = updateAdminDetails;

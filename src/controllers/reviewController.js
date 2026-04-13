@@ -49,7 +49,10 @@ module.exports = {
         });
       }
 
-      const productExists = await Product.findById(product);
+      const productExists = await Product.findOne({
+        _id: product,
+        isDeleted: false  // Only allow reviews for non-deleted products
+      });
       if (!productExists) {
         return res.status(404).json({
           status: false,

@@ -143,7 +143,15 @@ const productchema = new mongoose.Schema({
             name: { type: String },
             value: { type: String, default: '' }
         }
-    ]
+    ],
+    isDeleted: {
+        type: Boolean,
+        default: false
+    },
+    deletedAt: {
+        type: Date,
+        default: null
+    }
 }, {
     timestamps: true
 });

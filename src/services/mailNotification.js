@@ -300,6 +300,60 @@ module.exports = {
     }
   },
 
+  // Admin Login 2FA OTP Email
+  sendAdminLoginOTP: async ({ email, code, name }) => {
+    console.log('Sending Admin Login OTP email to:', email, 'with code:', code);
+    try {
+      const html = `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px; background-color: #f9f9f9;">
+          <div style="background-color: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
+            <div style="text-align: center; margin-bottom: 30px;">
+              <h1 style="color: #12344D; margin: 0; font-size: 28px;">Merk Admin</h1>
+              <p style="color: #666; margin: 10px 0 0 0;">🔐 Two-Factor Authentication</p>
+            </div>
+            
+            <p style="color: #333; font-size: 16px; line-height: 1.5;">Hello ${name},</p>
+            
+            <p style="color: #333; font-size: 16px; line-height: 1.5;">
+              Someone is trying to log in to your <strong>Merk Admin</strong> account. To complete the login process, please use the verification code below:
+            </p>
+            
+            <div style="background: linear-gradient(135deg, #12344D 0%, #1a4d6f 100%); padding: 25px; border-radius: 12px; text-align: center; margin: 30px 0;">
+              <p style="color: rgba(255,255,255,0.9); margin: 0 0 15px 0; font-size: 16px; font-weight: 500;">Your Verification Code</p>
+              <h2 style="color: #E58F14; font-size: 42px; margin: 0; letter-spacing: 8px; font-weight: bold; text-shadow: 0 2px 4px rgba(0,0,0,0.2);">${code}</h2>
+              <p style="color: rgba(255,255,255,0.8); margin: 15px 0 0 0; font-size: 14px;">⏱️ This code will expire in 10 minutes</p>
+            </div>
+            
+            <div style="background-color: #fff3cd; border-left: 4px solid #E58F14; padding: 15px; border-radius: 4px; margin: 25px 0;">
+              <p style="color: #856404; margin: 0; font-size: 14px; line-height: 1.6;">
+                <strong>⚠️ Security Notice:</strong> If you didn't attempt to log in, please ignore this email and consider changing your password immediately.
+              </p>
+            </div>
+            
+            <div style="text-align: center; margin: 30px 0;">
+              <p style="color: #666; font-size: 14px; margin: 0 0 10px 0;">Login attempt details:</p>
+              <p style="color: #999; font-size: 13px; margin: 0;">
+                📧 Email: ${email}<br>
+                🕐 Time: ${new Date().toLocaleString('en-US', { timeZone: 'UTC', dateStyle: 'medium', timeStyle: 'short' })} UTC
+              </p>
+            </div>
+            
+            <div style="border-top: 1px solid #eee; margin-top: 30px; padding-top: 20px; text-align: center;">
+              <p style="color: #666; font-size: 14px; margin: 0;">
+                Thanks for keeping your account secure,<br>
+                <strong>The Merk Admin Team</strong>
+              </p>
+            </div>
+          </div>
+        </div>
+      `;
+      return await sendMail(email, "🔐 Merk Admin - Login Verification Code", html);
+    } catch (err) {
+      console.error('Error sending Admin Login OTP email:', err);
+      throw new Error("Could not send Admin Login OTP mail");
+    }
+  },
+
   passwordChange: async ({ email }) => {
     try {
       const html = `
