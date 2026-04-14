@@ -155,9 +155,38 @@ const getUserStats = async (req, res) => {
   }
 };
 
+const deleteUser = async (req, res) => {
+  try {
+    const { userId } = req.params;
+    
+    console.log('deleteUser called with userId:', userId);
+    
+    if (!userId || userId === 'undefined') {
+      console.log('Invalid userId provided:', userId);
+      return response.error(res, 'Invalid user ID provided');
+    }
+    
+    const user = await User.findById(userId);
+    if (!user) {
+      return response.error(res, 'User not found');
+    }
+
+    // Soft delete - set isDeleted flag to true
+    user.isDeleted = true;
+    await user.save();
+
+    console.log('User soft deleted successfully:', userId);
+    return response.success(res, { message: 'User deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting user:', error);
+    return response.error(res, error.message);
+  }
+};
+
 module.exports = {
   testUsers,
   getAllUsers,
   getUserById,
-  getUserStats
+  getUserStats,
+  deleteUser
 };

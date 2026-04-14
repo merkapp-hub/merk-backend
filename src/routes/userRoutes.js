@@ -7,5 +7,6 @@ router.get('/test-users', authMiddleware(['admin']), userController.testUsers);
 router.get('/users', authMiddleware(['admin']), userController.getAllUsers);
 router.get('/users/stats', authMiddleware(['admin']), userController.getUserStats);
 router.get('/users/:userId', authMiddleware(['admin']), userController.getUserById);
+router.delete('/users/:userId', authMiddleware(['admin']), userController.deleteUser);
 
 module.exports = router;

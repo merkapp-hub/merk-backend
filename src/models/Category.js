@@ -27,7 +27,11 @@ const categorySchema = new mongoose.Schema({
             name: { type: String },
             value: { type: String, default: '' }
         }
-    ]
+    ],
+    position: {
+        type: Number,
+        default: 0
+    }
 }, {
     timestamps: true
 });

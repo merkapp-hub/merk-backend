@@ -53,13 +53,9 @@ module.exports = {
       payload.price_slot = parseJSONField(payload.price_slot, []);
       payload.attributes = parseJSONField(payload.attributes, []);
       payload.varients = parseJSONField(payload.varients, []);
+      payload.category = parseJSONField(payload.category, []);
 
-      // Handle hasVariants flag
       payload.hasVariants = payload.hasVariants === 'true' || payload.hasVariants === true;
-
-      if (payload.category && typeof payload.category === 'string') {
-        payload.category = payload.category.trim();
-      }
 
       // Handle images from file uploads
       let uploadedImages = [];
@@ -211,7 +207,6 @@ getProduct: async (req, res) => {
 
       const products = await Product.aggregate([
         { $match: query },
-        // Random shuffle: Add a random field and sort by it for dynamic ordering
         { $addFields: { randomSort: { $rand: {} } } },
         { $sort: { randomSort: 1 } },
         { $skip: skip },
@@ -223,12 +218,6 @@ getProduct: async (req, res) => {
             foreignField: "_id",
             as: "category",
             pipeline: [{ $project: { name: 1, slug: 1 } }]
-          }
-        },
-        {
-          $unwind: {
-            path: "$category",
-            preserveNullAndEmptyArrays: true
           }
         },
         {
@@ -246,7 +235,6 @@ getProduct: async (req, res) => {
             sponsered: 1,
             createdAt: 1,
             userid: 1
-            // randomSort field automatically excluded when not included in projection
           }
         }
       ]);
@@ -283,18 +271,34 @@ getProduct: async (req, res) => {
   getProductforseller: async (req, res) => {
     try {
       const { page = 1, limit = 20 } = req.query;
-      // let data = {}
-      // if (req.query.seller_id) {
-      //     data.userid = req.query.seller_id
-      // }
+      
+      const skip = (page - 1) * limit;
+      
       let product = await Product.find({ 
         userid: req.user.id,
-        isDeleted: false  // Only fetch non-deleted products
+        isDeleted: false
       })
+        .populate("category", "name slug")
         .sort({ createdAt: -1 })
         .limit(limit * 1)
-        .skip((page - 1) * limit);
-      return response.success(res, product);
+        .skip(skip);
+      
+      const totalProducts = await Product.countDocuments({ 
+        userid: req.user.id,
+        isDeleted: false
+      });
+      
+      const totalPages = Math.ceil(totalProducts / limit);
+      
+      return response.success(res, {
+        data: product,
+        pagination: {
+          totalItems: totalProducts,
+          totalPages: totalPages,
+          currentPage: parseInt(page),
+          itemsPerPage: parseInt(limit),
+        },
+      });
     } catch (error) {
       return response.error(res, error);
     }
@@ -453,9 +457,9 @@ getProduct: async (req, res) => {
     try {
       const { page = 1, limit = 20 } = req.query;
       let product = await Product.find({ 
-        category: req.params.id, 
+        category: { $in: [req.params.id] }, 
         is_verified: true,
-        isDeleted: false  // Only fetch non-deleted products
+        isDeleted: false
       })
         .populate("category")
         .sort({ createdAt: -1 })
@@ -695,9 +699,11 @@ getProduct: async (req, res) => {
         }
       }
 
-      if (payload.category) {
-        if (typeof payload.category === 'string' && !payload.category.match(/^[0-9a-fA-F]{24}$/)) {
-          delete payload.category;
+      if (payload.category && typeof payload.category === 'string') {
+        try {
+          payload.category = JSON.parse(payload.category);
+        } catch (e) {
+          payload.category = [];
         }
       }
 
@@ -1784,7 +1790,10 @@ getProduct: async (req, res) => {
             varients: 1,
             is_verified: 1,
             sponsered: 1,
-            createdAt: 1
+            createdAt: 1,
+            stock: 1,
+            Quantity: 1,
+            hasVariants: 1
           }
         }
       ]);
@@ -4625,6 +4634,36 @@ getProduct: async (req, res) => {
       console.error('getReturnsBySellerId error:', error);
       return response.error(res, error);
     }
+  },
+  // Delete order by ID (hard delete)
+  deleteOrder: async (req, res) => {
+    try {
+      const { orderId } = req.params;
+      
+      console.log('deleteOrder called with orderId:', orderId);
+      
+      if (!orderId || orderId === 'undefined') {
+        console.log('Invalid orderId provided:', orderId);
+        return response.error(res, 'Invalid order ID provided');
+      }
+      
+      const order = await ProductRequest.findById(orderId);
+      if (!order) {
+        return response.error(res, 'Order not found');
+      }
+
+      // Hard delete - permanently remove from database
+      await ProductRequest.findByIdAndDelete(orderId);
+
+      console.log('Order deleted successfully:', orderId);
+      return response.success(res, { message: 'Order deleted successfully' });
+    } catch (error) {
+      console.error('Error deleting order:', error);
+      return response.error(res, error.message);
+    }
   }
 
 }; 
+
+ 
+ 

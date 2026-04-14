@@ -4,10 +4,10 @@
  
 const mongoose = require('mongoose');
 const productchema = new mongoose.Schema({
-    category: {
+    category: [{
         type: mongoose.Schema.Types.ObjectId,
         ref: "Category",
-    },
+    }],
     theme: [{
         type: mongoose.Schema.Types.ObjectId,
         ref: "Theme",

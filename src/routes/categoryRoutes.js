@@ -10,5 +10,6 @@ router.get("/getPopularCategory", category.getPopularCategory);
 router.post("/updateCategory", authMiddleware(["user", "admin", "seller"]), category.updateCategory);
 router.delete("/deleteCategory/:id", authMiddleware(["user", "admin", "seller"]), category.deleteCategory);
 router.post("/deleteAllCategory", authMiddleware(["user", "admin", "seller"]), category.deleteAllCategory);
+router.post("/updateCategoryPositions", authMiddleware(["user", "admin", "seller"]), category.updateCategoryPositions);
 
 module.exports = router;

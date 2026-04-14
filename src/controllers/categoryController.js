@@ -37,7 +37,7 @@ module.exports = {
             let d = n4.toUpperCase()
             console.log(d)
             const { page = 1, limit } = req.query;
-            let category = await Category.find().limit(limit * 1)
+            let category = await Category.find().sort({ position: 1 }).limit(limit * 1)
                 .skip((page - 1) * limit);
             return response.success(res, category);
         } catch (error) {
@@ -133,6 +133,22 @@ module.exports = {
             const newid = req.body.category.map(f => new mongoose.Types.ObjectId(f))
             await Category.deleteMany({ _id: { $in: newid } });
             return response.success(res, { meaasge: "Deleted successfully" });
+        } catch (error) {
+            return response.error(res, error);
+        }
+    },
+
+    updateCategoryPositions: async (req, res) => {
+        try {
+            const { categories } = req.body;
+            const bulkOps = categories.map((cat, index) => ({
+                updateOne: {
+                    filter: { _id: cat._id },
+                    update: { position: index }
+                }
+            }));
+            await Category.bulkWrite(bulkOps);
+            return response.success(res, { message: 'Positions updated successfully' });
         } catch (error) {
             return response.error(res, error);
         }

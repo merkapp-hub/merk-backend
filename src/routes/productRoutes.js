@@ -238,4 +238,7 @@ router.get("/notifications/history/:orderId", authMiddleware(["admin", "seller",
 router.get("/getOrdersBySellerId/:id", authMiddleware(["admin", "seller"]), product.getOrdersBySellerId);
 router.get("/getReturnsBySellerId/:id", authMiddleware(["admin", "seller"]), product.getReturnsBySellerId);
 
+// Delete order endpoint
+router.delete("/deleteOrder/:orderId", authMiddleware(["admin"]), product.deleteOrder);
+
 module.exports = router;
