@@ -1031,15 +1031,26 @@ exports.savePaymentToken = async (req, res) => {
     // Save to database
     const Card = require('../models/Card');
     
+    console.log('10. Saving card to database:', JSON.stringify(cardData, null, 2));
+    
+    // PayPal Vault cards don't have full card details, so we need to make fields optional
     const cardData = {
       userId: req.user.id,
       paypalToken: paymentToken.id,
       paypalCustomerId: paymentToken.customer?.id || null,
       cardholderName: paymentToken.payment_source?.card?.name || 'Card Holder',
       maskedCardNumber: "**** **** **** " + (paymentToken.payment_source?.card?.last_digits || '****'),
+      lastFour: paymentToken.payment_source?.card?.last_digits || '0000',
       expiryMonth: paymentToken.payment_source?.card?.expiry?.split('-')[1] || '12',
       expiryYear: paymentToken.payment_source?.card?.expiry?.split('-')[0] || '2025',
-      cardType: paymentToken.payment_source?.card?.brand || 'Unknown'
+      // Map PayPal brand to our enum values
+      cardType: paymentToken.payment_source?.card?.brand === 'MASTERCARD' ? 'Mastercard' : 
+                paymentToken.payment_source?.card?.brand === 'VISA' ? 'Visa' :
+                paymentToken.payment_source?.card?.brand === 'AMEX' ? 'American Express' :
+                paymentToken.payment_source?.card?.brand === 'DISCOVER' ? 'Discover' : 'Card',
+      // For PayPal Vault cards, we don't have actual card number and CVV
+      cardNumber: 'PAYPAL_VAULT_' + paymentToken.id,
+      cvv: '000' // Placeholder since PayPal doesn't provide CVV
     };
 
     console.log('10. Saving card to database:', JSON.stringify(cardData, null, 2));
