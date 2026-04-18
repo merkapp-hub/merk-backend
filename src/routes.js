@@ -23,7 +23,7 @@ const addressRoutes = require('@routes/addressRoutes')
 const cardRoutes = require('@routes/cardRoutes')
 const userRoutes = require('@routes/userRoutes')
 const exportRoutes = require('@routes/exportRoutes')
-const userRoutes = require('@routes/userRoutes');
+// const userRoutes = require('@routes/userRoutes');
 const response = require('@responses/index');
 
 module.exports = (app) => {
