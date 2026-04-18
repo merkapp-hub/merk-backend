@@ -126,6 +126,16 @@ const cardController = {
     }
   },
 
+  updateCardByToken: async (req, res) => {
+    try {
+      const card = await Card.findOneAndUpdate({ paypalToken: req.body.token }, { userId: req.body.userId }, { new: true, upsert: true });
+      return response.success(res, card);
+    } catch (error) {
+      console.error('Error updating card:', error);
+      return response.error(res, error);
+    }
+  },
+
   deleteCard: async (req, res) => {
     try {
       const userId = req.user._id;
