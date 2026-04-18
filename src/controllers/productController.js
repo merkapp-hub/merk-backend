@@ -213,6 +213,20 @@ getProduct: async (req, res) => {
         { $limit: limit },
         {
           $lookup: {
+            from: "reviews",
+            localField: "_id",
+            foreignField: "product",
+            as: "reviews"
+          }
+        },
+        {
+          $addFields: {
+            reviewCount: { $size: "$reviews" },
+            averageRating: { $avg: "$reviews.rating" }
+          }
+        },
+        {
+          $lookup: {
             from: "categories",
             localField: "category",
             foreignField: "_id",
@@ -234,7 +248,9 @@ getProduct: async (req, res) => {
             is_verified: 1,
             sponsered: 1,
             createdAt: 1,
-            userid: 1
+            userid: 1,
+            reviewCount: 1,
+            averageRating: 1
           }
         }
       ]);
@@ -1783,6 +1799,20 @@ getProduct: async (req, res) => {
         { $limit: limit },
         {
           $lookup: {
+            from: "reviews",
+            localField: "_id",
+            foreignField: "product",
+            as: "reviews"
+          }
+        },
+        {
+          $addFields: {
+            reviewCount: { $size: "$reviews" },
+            averageRating: { $avg: "$reviews.rating" }
+          }
+        },
+        {
+          $lookup: {
             from: "categories",
             localField: "category",
             foreignField: "_id",
@@ -3236,9 +3266,9 @@ getProduct: async (req, res) => {
       console.log(`🔄 Using currency symbol: "${pdfSafeSymbol}" (${userCurrency})`);
 
       // Helper function to convert and format price
-    const formatPrice = (priceInUSD) => {
-  const converted = parseFloat((priceInUSD * exchangeRate).toFixed(2));
-  const formatted = `${pdfSafeSymbol} ${converted.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+      const formatPrice = (priceInUSD) => {
+        const converted = parseFloat((priceInUSD * exchangeRate).toFixed(2));
+        const formatted = `${pdfSafeSymbol} ${converted.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
         console.log(`💱 Converting: $${priceInUSD} → ${formatted} (rate: ${exchangeRate}, symbol: "${currencySymbol}" → "${pdfSafeSymbol}")`);
         return formatted;
       };

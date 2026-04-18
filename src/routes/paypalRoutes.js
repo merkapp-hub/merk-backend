@@ -23,6 +23,6 @@ router.post('/paypal/process-card-payment', authenticate, paypalController.proce
 router.post('/paypal/process-card-payment/new', authenticate, paypalController.processCardPaymentNew);
 
 router.post('/setup-token', paypalController.setupToken);
-router.post('/save-payment-token', authenticate, paypalController.savePaymentToken);
+router.post('/save-payment-token', paypalController.savePaymentToken);
 
 module.exports = router;

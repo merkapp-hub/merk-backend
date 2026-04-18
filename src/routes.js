@@ -23,12 +23,19 @@ const addressRoutes = require('@routes/addressRoutes')
 const cardRoutes = require('@routes/cardRoutes')
 const userRoutes = require('@routes/userRoutes')
 const exportRoutes = require('@routes/exportRoutes')
+const userRoutes = require('@routes/userRoutes');
+const response = require('@responses/index');
 
 module.exports = (app) => {
   app.get("/", (req, res) => {
     res.send("API running");
   });
+
   app.use('/api/auth', authRoutes);
+
+  // app.use('/api/auth', (req, res, next) => {
+  //   return response.unAuthorize(res, { message: "Estamos con dificultades técnicas, estamos solucionando para que puedas comprar sin problema" });
+  // });
   app.use('/api', blogsRoutes);
   app.use('/api', categoryRoutes);
   app.use('/api', contentManagementRoutes);
