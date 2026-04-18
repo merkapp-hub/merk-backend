@@ -978,29 +978,42 @@ exports.setupToken = async (req, res) => {
 
 exports.savePaymentToken = async (req, res) => {
   try {
+    console.log('=== SAVE PAYMENT TOKEN DEBUG START ===');
+    console.log('1. Request body:', JSON.stringify(req.body, null, 2));
+    console.log('2. User ID:', req.user?.id);
+    
     const { vaultSetupToken } = req.body;
     
     if (!vaultSetupToken) {
+      console.log('❌ ERROR: No vault setup token provided');
       return res.status(400).json({ 
         status: false, 
         error: 'Vault setup token is required' 
       });
     }
 
+    console.log('3. Vault Setup Token:', vaultSetupToken);
+    console.log('4. Getting PayPal access token...');
+    
     const accessToken = await getPayPalAccessToken();
-console.log('Received vault setup token:', vaultSetupToken);
-console.log('Received accessToken:', accessToken);
+    console.log('5. Access token received:', accessToken ? 'YES' : 'NO');
+
+    const requestBody = {
+      payment_source: {
+        token: {
+          id: vaultSetupToken,
+          type: 'SETUP_TOKEN'
+        }
+      }
+    };
+
+    console.log('6. PayPal API Request Body:', JSON.stringify(requestBody, null, 2));
+    console.log('7. Making PayPal API call to: https://api-m.paypal.com/v3/vault/payment-tokens');
+
     // Convert setup token to payment token
     const response = await axios.post(
       'https://api-m.paypal.com/v3/vault/payment-tokens',
-      {
-        payment_source: {
-          token: {
-            id: vaultSetupToken,
-            type: 'SETUP_TOKEN'
-          }
-        }
-      },
+      requestBody,
       {
         headers: {
           'Authorization': `Bearer ${accessToken}`,
@@ -1010,11 +1023,15 @@ console.log('Received accessToken:', accessToken);
       }
     );
 
+    console.log('8. PayPal API Response Status:', response.status);
+    console.log('9. PayPal API Response Data:', JSON.stringify(response.data, null, 2));
+
     const paymentToken = response.data;
 
     // Save to database
     const Card = require('../models/Card');
-    const savedCard = new Card({
+    
+    const cardData = {
       userId: req.user.id,
       paypalToken: paymentToken.id,
       paypalCustomerId: paymentToken.customer?.id || null,
@@ -1023,11 +1040,16 @@ console.log('Received accessToken:', accessToken);
       expiryMonth: paymentToken.payment_source?.card?.expiry?.split('-')[1] || '12',
       expiryYear: paymentToken.payment_source?.card?.expiry?.split('-')[0] || '2025',
       cardType: paymentToken.payment_source?.card?.brand || 'Unknown'
-    });
+    };
 
+    console.log('10. Saving card to database:', JSON.stringify(cardData, null, 2));
+    
+    const savedCard = new Card(cardData);
     await savedCard.save();
-console.log('Saved card to database:', savedCard);
-console.log('paymentToken=======>:', paymentToken);
+
+    console.log('11. Card saved successfully with ID:', savedCard._id);
+    console.log('=== SAVE PAYMENT TOKEN DEBUG END ===');
+
     res.json({
       status: true,
       paymentToken: paymentToken.id,
@@ -1035,11 +1057,31 @@ console.log('paymentToken=======>:', paymentToken);
       cardData: savedCard
     });
   } catch (error) {
-    console.error('Payment token error:', error.response?.data || error.message);
+    console.error('❌ === PAYMENT TOKEN ERROR DEBUG ===');
+    console.error('Error Type:', error.constructor.name);
+    console.error('Error Message:', error.message);
+    
+    if (error.response) {
+      console.error('Response Status:', error.response.status);
+      console.error('Response Headers:', JSON.stringify(error.response.headers, null, 2));
+      console.error('Response Data:', JSON.stringify(error.response.data, null, 2));
+    } else if (error.request) {
+      console.error('No response received. Request was made but no response.');
+      console.error('Request details:', error.request);
+    } else {
+      console.error('Error Stack:', error.stack);
+    }
+    console.error('=== ERROR DEBUG END ===');
+    
     res.status(500).json({ 
       status: false,
       error: 'Failed to save card',
-      details: error.response?.data || error.message 
+      details: error.response?.data || error.message,
+      debugInfo: {
+        hasResponse: !!error.response,
+        hasRequest: !!error.request,
+        errorType: error.constructor.name
+      }
     });
   }
 }
