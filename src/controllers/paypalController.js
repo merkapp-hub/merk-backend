@@ -979,7 +979,8 @@ exports.savePaymentToken = async (req, res) => {
   try {
     const { vaultSetupToken } = req.body;
     const accessToken = await getPayPalAccessToken();
-
+console.log('Received vault setup token:', vaultSetupToken);
+console.log('Received accessToken:', accessToken);
     // Convert setup token to payment token
     const response = await axios.post(
       'https://api-m.paypal.com/v3/vault/payment-tokens',
@@ -1010,7 +1011,8 @@ exports.savePaymentToken = async (req, res) => {
     });
 
     await savedCard.save();
-
+console.log('Saved card to database:', savedCard);
+console.log('paymentToken=======>:', paymentToken);
     res.json({
       status: true,
       paymentToken: paymentToken.id,
