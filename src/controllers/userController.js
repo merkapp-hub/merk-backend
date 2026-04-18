@@ -43,20 +43,23 @@ const getAllUsers = async (req, res) => {
       ];
     }
 
-    // Date filtering
+    // Date filtering with proper timezone handling
     if (startDate || endDate) {
       query.createdAt = {};
       if (startDate) {
-        query.createdAt.$gte = new Date(startDate);
+        // Parse date string and set to start of day in UTC
+        const start = new Date(startDate + 'T00:00:00.000Z');
+        query.createdAt.$gte = start;
       }
       if (endDate) {
-        const endOfDay = new Date(endDate);
-        endOfDay.setHours(23, 59, 59, 999);
-        query.createdAt.$lte = endOfDay;
+        // Parse date string and set to end of day in UTC
+        const end = new Date(endDate + 'T23:59:59.999Z');
+        query.createdAt.$lte = end;
       }
     }
 
     console.log('User query:', query);
+    console.log('Date filter - Start:', query.createdAt?.$gte, 'End:', query.createdAt?.$lte);
 
     const users = await User.find(query)
       .select('-password')

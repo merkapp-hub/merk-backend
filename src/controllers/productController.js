@@ -330,7 +330,7 @@ getProduct: async (req, res) => {
         isDeleted: false  // Only fetch non-deleted products
       })
         .populate("category", "name slug")
-        .populate("userid", "firstName lastName email companyName logo");
+        .populate("userid", "firstName lastName email");
 
       // Check if product exists before accessing its properties
       if (!product) {
@@ -351,15 +351,34 @@ getProduct: async (req, res) => {
           user: req.query.user,
         });
       }
+      
+      // Fetch store data for seller info
+      let sellerInfo = product.userid ? {
+        _id: product.userid._id,
+        email: product.userid.email,
+        firstName: product.userid.firstName,
+        lastName: product.userid.lastName
+      } : null;
+      
+      if (product.userid && product.userid._id) {
+        const Store = require('@models/Store');
+        const storeData = await Store.findOne({ userid: product.userid._id }).select('companyName logo');
+        if (storeData) {
+          sellerInfo.companyName = storeData.companyName;
+          sellerInfo.logo = storeData.logo;
+        }
+      }
+      
       let d = {
         ...product._doc,
-        seller: product.userid, // Add seller info
+        seller: sellerInfo, // Add enhanced seller info with store data
         rating: await getReview(product._id),
         reviews,
         favourite: favourite ? true : false,
       };
       return response.success(res, d);
     } catch (error) {
+      console.error('getProductByslug error:', error);
       return response.error(res, error);
     }
   },
