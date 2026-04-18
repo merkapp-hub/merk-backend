@@ -1031,8 +1031,6 @@ exports.savePaymentToken = async (req, res) => {
     // Save to database
     const Card = require('../models/Card');
     
-    console.log('10. Saving card to database:', JSON.stringify(cardData, null, 2));
-    
     // PayPal Vault cards don't have full card details, so we need to make fields optional
     const cardData = {
       userId: req.user.id,
