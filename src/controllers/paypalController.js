@@ -979,18 +979,32 @@ exports.setupToken = async (req, res) => {
 exports.savePaymentToken = async (req, res) => {
   try {
     const { vaultSetupToken } = req.body;
+    
+    if (!vaultSetupToken) {
+      return res.status(400).json({ 
+        status: false, 
+        error: 'Vault setup token is required' 
+      });
+    }
+
     const accessToken = await getPayPalAccessToken();
 console.log('Received vault setup token:', vaultSetupToken);
 console.log('Received accessToken:', accessToken);
     // Convert setup token to payment token
     const response = await axios.post(
       'https://api-m.paypal.com/v3/vault/payment-tokens',
-      {},
+      {
+        payment_source: {
+          token: {
+            id: vaultSetupToken,
+            type: 'SETUP_TOKEN'
+          }
+        }
+      },
       {
         headers: {
           'Authorization': `Bearer ${accessToken}`,
           'Content-Type': 'application/json',
-          'Paypal-Auth-Assertion': vaultSetupToken,
           'PayPal-Request-Id': `PAYMENT-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
         }
       }
@@ -1001,14 +1015,14 @@ console.log('Received accessToken:', accessToken);
     // Save to database
     const Card = require('../models/Card');
     const savedCard = new Card({
-      userId: req.user.id, // If authenticated
+      userId: req.user.id,
       paypalToken: paymentToken.id,
-      paypalCustomerId: paymentToken.customer.id,
-      cardholderName: paymentToken.payment_source.card.name,
-      maskedCardNumber: "**** **** **** " + paymentToken.payment_source.card.last_digits,
-      expiryMonth: paymentToken.payment_source.card.expiry.split('-')[1],
-      expiryYear: paymentToken.payment_source.card.expiry.split('-')[0],
-      cardType: paymentToken.payment_source.card.brand || 'Unknown'
+      paypalCustomerId: paymentToken.customer?.id || null,
+      cardholderName: paymentToken.payment_source?.card?.name || 'Card Holder',
+      maskedCardNumber: "**** **** **** " + (paymentToken.payment_source?.card?.last_digits || '****'),
+      expiryMonth: paymentToken.payment_source?.card?.expiry?.split('-')[1] || '12',
+      expiryYear: paymentToken.payment_source?.card?.expiry?.split('-')[0] || '2025',
+      cardType: paymentToken.payment_source?.card?.brand || 'Unknown'
     });
 
     await savedCard.save();
@@ -1017,12 +1031,16 @@ console.log('paymentToken=======>:', paymentToken);
     res.json({
       status: true,
       paymentToken: paymentToken.id,
-      customerId: paymentToken.customer.id,
+      customerId: paymentToken.customer?.id,
       cardData: savedCard
     });
   } catch (error) {
     console.error('Payment token error:', error.response?.data || error.message);
-    res.status(500).json({ error: 'Failed to save card' });
+    res.status(500).json({ 
+      status: false,
+      error: 'Failed to save card',
+      details: error.response?.data || error.message 
+    });
   }
 }
 
