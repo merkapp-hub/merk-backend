@@ -2207,7 +2207,7 @@ getProduct: async (req, res) => {
         cond = {
           seller_id: new mongoose.Types.ObjectId(req.user.id || req.user._id),
           assignedEmployee: { $exists: false },
-          status: { $in: ["Pending", "Packed"] },
+          // Removed status filter to show all orders
         };
       }
 
