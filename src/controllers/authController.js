@@ -513,9 +513,9 @@ module.exports = {
         });
       }
 
-      // Generate random 6-digit OTP
-      const otp = Math.floor(100000 + Math.random() * 900000);
-   
+      // Generate random 6-digit OTP and convert to string
+      const otp = String(Math.floor(100000 + Math.random() * 900000));
+      console.log('🔑 Generated OTP:', otp, 'Type:', typeof otp);
       
       // Send OTP email
       try {
@@ -538,13 +538,14 @@ module.exports = {
         });
       }
       
-      // Save OTP to verification collection
+      // Save OTP to verification collection as string
       const verification = new Verification({
         user: user._id,
-        otp: otp,
+        otp: otp, // Already a string
         expiration_at: userHelper.getDatewithAddedMinutes(10), // 10 minutes expiry
       });
       await verification.save();
+      console.log('💾 OTP saved to DB:', verification.otp, 'Type:', typeof verification.otp);
       
       // Create temporary token for OTP verification step
       const tempToken = await userHelper.encode(verification._id);
@@ -570,10 +571,14 @@ module.exports = {
     try {
       const { otp, tempToken } = req.body;
 
-      // console.log('Verify OTP Request:', { otp, tempToken: tempToken ? 'exists' : 'missing' });
+      console.log('🔍 Verify OTP Request:', { 
+        otp, 
+        otpType: typeof otp,
+        tempToken: tempToken ? 'exists' : 'missing' 
+      });
 
       if (!otp || !tempToken) {
-        // console.log(' Missing OTP or tempToken');
+        console.log('❌ Missing OTP or tempToken');
         return res.status(400).json({ 
           success: false,
           message: 'OTP and token are required' 
@@ -582,10 +587,16 @@ module.exports = {
 
       // Decode temp token to get verification ID
       const verificationId = await userHelper.decode(tempToken);
-     
+      // console.log('🔓 Decoded verification ID:', verificationId);
       
       const verification = await Verification.findById(verificationId);
-    
+      // console.log('📋 Verification record:', verification ? {
+      //   id: verification._id,
+      //   otp: verification.otp,
+      //   otpType: typeof verification.otp,
+      //   user: verification.user,
+      //   expiry: verification.expiration_at
+      // } : 'not found');
 
       if (!verification) {
         console.log('❌ Verification record not found');
@@ -595,14 +606,21 @@ module.exports = {
         });
       }
 
-   
+      // Convert both to strings for comparison
+      const otpFromDB = String(verification.otp);
+      const otpFromUser = String(otp).trim();
+      
+      // console.log('🔑 OTP Comparison:', { 
+      //   fromDB: otpFromDB, 
+      //   fromUser: otpFromUser,
+      //   match: otpFromDB === otpFromUser
+      // });
 
-      // Check if OTP matches and not expired
-      // Fallback OTP: 000000 for testing/bypass (temporary)
-      const isValidOTP = (verification.otp == otp) || (otp === '000024');
+      // Check if OTP matches
+      const isValidOTP = (otpFromDB === otpFromUser);
       
       if (!isValidOTP) {
-        console.log('Invalid OTP');
+        console.log('❌ Invalid OTP - No match');
         return res.status(401).json({ 
           success: false,
           message: 'Invalid OTP. Please try again.' 
