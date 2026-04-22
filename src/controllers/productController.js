@@ -2792,21 +2792,98 @@ getProduct: async (req, res) => {
   productSearch: async (req, res) => {
     try {
       const { page = 1, limit = 20 } = req.query;
-      let cond = {
+      const searchKey = req.query.key;
+      
+      // Search products
+      let productCond = {
         is_verified: true,
-        isDeleted: false,  // Only fetch non-deleted products
+        isDeleted: false,
         $or: [
-          { name: { $regex: req.query.key, $options: "i" } },
-          { categoryName: { $regex: req.query.key, $options: "i" } },
+          { name: { $regex: searchKey, $options: "i" } },
+          { categoryName: { $regex: searchKey, $options: "i" } },
         ],
       };
-      const product = await Product.find(cond)
+      
+      const products = await Product.find(productCond)
         .sort({ createdAt: -1 })
-        // .select("name offer price userid varients")
         .limit(limit * 1)
         .skip((page - 1) * limit);
-      return response.success(res, product);
+      
+      // Search stores - get all matching stores
+      const Store = require('@models/Store');
+      
+      const stores = await Store.find({
+        $or: [
+          { companyName: { $regex: searchKey, $options: "i" } },
+          { description: { $regex: searchKey, $options: "i" } },
+        ]
+      })
+      .limit(10)
+      .populate('userid', 'firstName lastName email status role');
+      
+      // Filter stores with multiple conditions
+      const validStores = [];
+      
+      for (const store of stores) {
+        // Check 1: User must exist and be verified
+        if (!store.userid || store.userid.status !== 'Verified') {
+          continue;
+        }
+        
+        // Check 2: Store must have documents (kbis OR identity)
+        if (!store.kbis && !store.identity) {
+          continue;
+        }
+        
+        // Check 3: Seller must have products
+        const productCount = await Product.countDocuments({
+          userid: store.userid._id,
+          is_verified: true,
+          isDeleted: false
+        });
+        
+        if (productCount === 0) {
+          continue;
+        }
+        
+        validStores.push(store);
+      }
+      
+      // Remove duplicates based on sellerId
+      const uniqueStores = [];
+      const seenSellerIds = new Set();
+      
+      for (const store of validStores) {
+        const sellerId = store.userid._id.toString();
+        if (!seenSellerIds.has(sellerId)) {
+          seenSellerIds.add(sellerId);
+          uniqueStores.push(store);
+        }
+      }
+      
+      // Take only first 3
+      const finalStores = uniqueStores.slice(0, 3);
+      
+      // Format stores for response
+      const formattedStores = finalStores.map(store => ({
+        _id: store._id,
+        type: 'store',
+        name: store.companyName,
+        description: store.description,
+        logo: store.logo,
+        address: store.address,
+        sellerId: store.userid._id,
+        sellerName: `${store.userid.firstName || ''} ${store.userid.lastName || ''}`.trim(),
+        verification: store.verification,
+        userStatus: store.userid.status
+      }));
+      
+      // Combine results - stores first, then products
+      const combinedResults = [...formattedStores, ...products];
+      
+      return response.success(res, combinedResults);
     } catch (error) {
+      console.error('❌ productSearch error:', error);
       return response.error(res, error);
     }
   },

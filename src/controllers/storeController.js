@@ -134,7 +134,7 @@ module.exports = {
 updateStore: async (req, res) => {
         try {
             const payload = req?.body || {};
-            const { userid, companyName, logo, status } = payload;
+            const { userid, companyName, logo, status, address, city, country } = payload;
             
             if (!userid) {
                 return res.status(400).json({
@@ -165,7 +165,7 @@ updateStore: async (req, res) => {
                 });
             }
             
-            // Otherwise, update Store table (companyName, logo)
+            // Otherwise, update Store table
             const store = await Store.findOne({ userid });
             
             if (!store) {
@@ -175,9 +175,12 @@ updateStore: async (req, res) => {
                 });
             }
             
-            // Update only companyName and logo
+            // Update fields
             if (companyName) store.companyName = companyName;
             if (logo) store.logo = logo;
+            if (address) store.address = address;
+            if (city) store.city = city;
+            if (country) store.country = country;
             
             await store.save();
             
