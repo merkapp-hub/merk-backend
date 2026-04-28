@@ -1032,6 +1032,7 @@ getProduct: async (req, res) => {
             timeslot: payload.timeslot,
             deliveryCharge: payload.deliveryCharge,
             deliveryTip: payload.deliveryTip,
+            codTariff: payload.codTariff || 0,
             // Add currency information for PDF generation
             userCurrency: payload.userCurrency || 'USD',
             currencySymbol: payload.currencySymbol || '$',
@@ -1174,13 +1175,35 @@ getProduct: async (req, res) => {
           }
         }
 
-        // Update sold_pieces for each product
+        // Update sold_pieces and variant stock for each product
         for (const productItem of sellerOrders[sellerId].productDetail) {
           await Product.findByIdAndUpdate(
             productItem.product,
             { $inc: { sold_pieces: productItem.qty } }, // Increment sold_pieces
             { new: true }
           );
+
+          // Decrement variant size stock if product has variants
+          if (productItem.color && productItem.size) {
+            await Product.updateOne(
+              {
+                _id: productItem.product,
+                "varients.color": productItem.color,
+                "varients.selected.value": productItem.size,
+              },
+              {
+                $inc: {
+                  "varients.$[v].selected.$[s].total": -productItem.qty,
+                },
+              },
+              {
+                arrayFilters: [
+                  { "v.color": productItem.color },
+                  { "s.value": productItem.size },
+                ],
+              }
+            );
+          }
         }
 
 
@@ -1391,6 +1414,7 @@ getProduct: async (req, res) => {
             timeslot: payload.timeslot,
             deliveryCharge: payload.deliveryCharge || 0,
             deliveryTip: payload.deliveryTip || 0,
+            codTariff: payload.codTariff || 0,
             // Add currency information for PDF generation
             userCurrency: payload.userCurrency || 'USD',
             currencySymbol: payload.currencySymbol || '$',
@@ -1575,12 +1599,35 @@ getProduct: async (req, res) => {
             console.error("⚠️ Error sending customer notification:", customerNotifError);
           }
 
+          // Update sold_pieces and variant stock for each product
           for (const productItem of sellerOrders[sellerId].productDetail) {
             await Product.findByIdAndUpdate(
               productItem.product,
               { $inc: { sold_pieces: productItem.qty } },
               { new: true }
             );
+
+            // Decrement variant size stock if product has variants
+            if (productItem.color && productItem.size) {
+              await Product.updateOne(
+                {
+                  _id: productItem.product,
+                  "varients.color": productItem.color,
+                  "varients.selected.value": productItem.size,
+                },
+                {
+                  $inc: {
+                    "varients.$[v].selected.$[s].total": -productItem.qty,
+                  },
+                },
+                {
+                  arrayFilters: [
+                    { "v.color": productItem.color },
+                    { "s.value": productItem.size },
+                  ],
+                }
+              );
+            }
           }
 
 
@@ -3402,6 +3449,7 @@ getProduct: async (req, res) => {
 
       const taxAmount = order.tax || 0;
       const deliveryCharge = order.deliveryCharge || 0;
+      const codTariff = order.codTariff || 0;
 
       console.log(`📄 Invoice Generation - Order charges:`, {
         orderId: order._id,
@@ -3430,11 +3478,19 @@ getProduct: async (req, res) => {
         .fillColor('#111827')
         .text(deliveryCharge > 0 ? formatPrice(deliveryCharge) : 'Free', 480, yPosition);
 
+      if (codTariff > 0) {
+        yPosition += 20;
+        doc.fillColor('#6b7280')
+          .text('COD Tariff:', summaryX, yPosition)
+          .fillColor('#111827')
+          .text(formatPrice(codTariff), 480, yPosition);
+      }
+
       yPosition += 25;
       doc.rect(50, yPosition - 5, 515, 30)
         .fill('#12344D');
 
-      const finalTotal = itemsTotal + taxAmount + deliveryCharge;
+      const finalTotal = itemsTotal + taxAmount + deliveryCharge + codTariff;
       const formattedTotal = formatPrice(finalTotal);
 
       console.log('📄 TOTAL AMOUNT DEBUG:', {

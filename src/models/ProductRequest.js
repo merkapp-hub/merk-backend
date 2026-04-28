@@ -131,6 +131,10 @@ const productrequestchema = new mongoose.Schema(
     deliveryCharge: {
       type: Number,
     },
+    codTariff: {
+      type: Number,
+      default: 0,
+    },
     deliveryTip: {
       type: Number,
     },
