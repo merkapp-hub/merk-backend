@@ -1001,7 +1001,7 @@ getProduct: async (req, res) => {
         _id: { $in: productIds },
         isDeleted: false  // Only fetch non-deleted products
       }).select("category");
-      const categoryIds = products.map((p) => p.category);
+      const categoryIds = products.map((p) => p.category).flat().filter(Boolean);
       const categories = await Category.find({
         _id: { $in: categoryIds },
       }).select("is_refundable");
@@ -1204,6 +1204,26 @@ getProduct: async (req, res) => {
               }
             );
           }
+           // Decrement variant stock directly if color exists but no size (selected array is empty)
+          else if (productItem.color) {
+            await Product.updateOne(
+              {
+                _id: productItem.product,
+                "varients.color": productItem.color,
+              },
+              {
+                $inc: { "varients.$.stock": -productItem.qty },
+              }
+            );
+          }
+          // Decrement product-level stock if no variants
+          else {
+            await Product.findByIdAndUpdate(
+              productItem.product,
+              { $inc: { stock: -productItem.qty } },
+              { new: true }
+            );
+          }
         }
 
 
@@ -1355,7 +1375,7 @@ getProduct: async (req, res) => {
       }).select("category").lean();
 
 
-      const categoryIds = products.map((p) => p.category);
+      const categoryIds = products.map((p) => p.category).flat().filter(Boolean);
 
 
       const categories = await Category.find({
@@ -1628,6 +1648,26 @@ getProduct: async (req, res) => {
                 }
               );
             }
+             else if (productItem.color) {
+              await Product.updateOne(
+                {
+                  _id: productItem.product,
+                  "varients.color": productItem.color,
+                },
+                {
+                  $inc: { "varients.$.stock": -productItem.qty },
+                }
+              );
+            }
+            // Decrement product-level stock if no variants
+            else {
+              await Product.findByIdAndUpdate(
+                productItem.product,
+                { $inc: { stock: -productItem.qty } },
+                { new: true }
+              );
+            }
+            
           }
 
 
@@ -1865,12 +1905,6 @@ getProduct: async (req, res) => {
             foreignField: "_id",
             as: "category",
             pipeline: [{ $project: { name: 1, slug: 1 } }] // Only get necessary category fields
-          }
-        },
-        {
-          $unwind: {
-            path: "$category",
-            preserveNullAndEmptyArrays: true
           }
         },
         {
@@ -3478,13 +3512,14 @@ getProduct: async (req, res) => {
         .fillColor('#111827')
         .text(deliveryCharge > 0 ? formatPrice(deliveryCharge) : 'Free', 480, yPosition);
 
-      if (codTariff > 0) {
-        yPosition += 20;
-        doc.fillColor('#6b7280')
-          .text('COD Tariff:', summaryX, yPosition)
-          .fillColor('#111827')
-          .text(formatPrice(codTariff), 480, yPosition);
-      }
+      // COD Tariff in PDF - temporarily disabled
+      // if (codTariff > 0) {
+      //   yPosition += 20;
+      //   doc.fillColor('#6b7280')
+      //     .text('COD Tariff:', summaryX, yPosition)
+      //     .fillColor('#111827')
+      //     .text(formatPrice(codTariff), 480, yPosition);
+      // }
 
       yPosition += 25;
       doc.rect(50, yPosition - 5, 515, 30)
